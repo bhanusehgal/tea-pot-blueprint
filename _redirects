@@ -1,0 +1,3 @@
+/ /frontend/index.html 200
+/assets/* /frontend/:splat 200
+/api/* https://teapot-backend.onrender.com/api/:splat 200
