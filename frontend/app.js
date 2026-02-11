@@ -28,6 +28,18 @@ const state = {
     camera: null,
     renderer: null,
     controls: null,
+    detachState: {
+      distancePct: 38,
+      bottom: false,
+      flare: false,
+      gasket: false,
+      strainer: false,
+    },
+    flareState: {
+      sizePct: 100,
+      curvaturePct: 100,
+      lastAppliedSizePct: 100,
+    },
     materialState: {
       preset: "stainless-brushed",
       primaryColor: "#c9d0d4",
@@ -208,6 +220,16 @@ const els = {
   threeRoughness: document.getElementById("threeRoughness"),
   threeMetalnessVal: document.getElementById("threeMetalnessVal"),
   threeRoughnessVal: document.getElementById("threeRoughnessVal"),
+  threeHeadFlareSize: document.getElementById("threeHeadFlareSize"),
+  threeHeadFlareSizeVal: document.getElementById("threeHeadFlareSizeVal"),
+  threeHeadCurvature: document.getElementById("threeHeadCurvature"),
+  threeHeadCurvatureVal: document.getElementById("threeHeadCurvatureVal"),
+  threeDetachDistance: document.getElementById("threeDetachDistance"),
+  threeDetachDistanceVal: document.getElementById("threeDetachDistanceVal"),
+  detachBottomToggle: document.getElementById("detachBottomToggle"),
+  detachFlareToggle: document.getElementById("detachFlareToggle"),
+  detachGasketToggle: document.getElementById("detachGasketToggle"),
+  detachStrainerToggle: document.getElementById("detachStrainerToggle"),
   shapeBodyCurve: document.getElementById("shapeBodyCurve"),
   shapeHeadFlare: document.getElementById("shapeHeadFlare"),
   shapeHeight: document.getElementById("shapeHeight"),
@@ -224,6 +246,7 @@ const els = {
   shapeResetBtn: document.getElementById("shapeResetBtn"),
   shapeSetBaseBtn: document.getElementById("shapeSetBaseBtn"),
   shapeApplyBtn: document.getElementById("shapeApplyBtn"),
+  partsPrintSvg: document.getElementById("partsPrintSvg"),
 };
 
 function mmToIn(mm) {
@@ -318,6 +341,108 @@ function syncThreeMaterialInputs() {
   updateThreeMaterialValueLabels();
 }
 
+function syncThreeDetachInputs() {
+  const detach = state.three.detachState;
+  if (els.threeDetachDistance) {
+    els.threeDetachDistance.value = String(detach.distancePct);
+  }
+  if (els.threeDetachDistanceVal) {
+    els.threeDetachDistanceVal.textContent = `${detach.distancePct}%`;
+  }
+  if (els.detachBottomToggle) {
+    els.detachBottomToggle.checked = Boolean(detach.bottom);
+  }
+  if (els.detachFlareToggle) {
+    els.detachFlareToggle.checked = Boolean(detach.flare);
+  }
+  if (els.detachGasketToggle) {
+    els.detachGasketToggle.checked = Boolean(detach.gasket);
+  }
+  if (els.detachStrainerToggle) {
+    els.detachStrainerToggle.checked = Boolean(detach.strainer);
+  }
+}
+
+function syncThreeFlareInputs() {
+  const flare = state.three.flareState;
+  if (els.threeHeadFlareSize) {
+    els.threeHeadFlareSize.value = String(flare.sizePct);
+  }
+  if (els.threeHeadFlareSizeVal) {
+    els.threeHeadFlareSizeVal.textContent = `${flare.sizePct}%`;
+  }
+  if (els.threeHeadCurvature) {
+    els.threeHeadCurvature.value = String(flare.curvaturePct);
+  }
+  if (els.threeHeadCurvatureVal) {
+    els.threeHeadCurvatureVal.textContent = `${flare.curvaturePct}%`;
+  }
+}
+
+function resetThreeFormControls() {
+  state.three.detachState = {
+    distancePct: 38,
+    bottom: false,
+    flare: false,
+    gasket: false,
+    strainer: false,
+  };
+  state.three.flareState = {
+    sizePct: 100,
+    curvaturePct: 100,
+    lastAppliedSizePct: 100,
+  };
+  syncThreeDetachInputs();
+  syncThreeFlareInputs();
+}
+
+function getHeadCurvatureScale() {
+  const pct = Number(state.three.flareState.curvaturePct || 100);
+  return clamp(pct / 100, 0.4, 1.7);
+}
+
+function getExplodeDistanceMm(dim) {
+  const pct = clamp(Number(state.three.detachState.distancePct || 0), 0, 100);
+  const ref = Math.max(Number(dim.overall_height_mm), Number(dim.head_top_diameter_mm), 80);
+  return (pct / 100) * (ref * 0.55);
+}
+
+function getPartOffsetVector(dim, partKey) {
+  const detach = state.three.detachState;
+  const distance = getExplodeDistanceMm(dim);
+  if (distance <= 0) {
+    return new THREE.Vector3(0, 0, 0);
+  }
+  if (partKey === "bottom" && detach.bottom) {
+    return new THREE.Vector3(0, -distance * 0.68, 0);
+  }
+  if (partKey === "flare" && detach.flare) {
+    return new THREE.Vector3(0, distance * 0.58, 0);
+  }
+  if (partKey === "gasket" && detach.gasket) {
+    return new THREE.Vector3(distance * 0.22, distance * 0.74, 0);
+  }
+  if (partKey === "strainer" && detach.strainer) {
+    return new THREE.Vector3(-distance * 0.18, distance * 0.82, 0);
+  }
+  return new THREE.Vector3(0, 0, 0);
+}
+
+function applyHeadFlareSizeRatio(ratio) {
+  if (!state.blueprint?.dimensions || !Number.isFinite(ratio)) {
+    return;
+  }
+  const dim = state.blueprint.dimensions;
+  dim.head_top_diameter_mm = clamp(Number(dim.head_top_diameter_mm) * ratio, Number(dim.neck_diameter_mm) + 8, 260);
+  dim.head_height_mm = clamp(Number(dim.head_height_mm) * (1 + ((ratio - 1) * 0.72)), 20, 180);
+  dim.head_neck_overlap_mm = clamp(Number(dim.head_neck_overlap_mm), 2, dim.head_height_mm * 0.5);
+  dim.overall_height_mm = Number((
+    Number(dim.body_height_mm)
+    + Number(dim.head_height_mm)
+    - Number(dim.head_neck_overlap_mm)
+  ).toFixed(2));
+}
+
 function applyThreeMaterialPreset(presetKey, rerender = true) {
   const resolvedKey = (presetKey in THREE_MATERIAL_PRESETS) ? presetKey : "stainless-brushed";
   const preset = getThreeMaterialPreset(resolvedKey);
@@ -387,12 +512,13 @@ function buildBodyProfilePoints(dim, sampleCount = 34) {
   return points;
 }
 
-function buildHeadProfilePoints(dim, sampleCount = 24, startY = null) {
+function buildHeadProfilePoints(dim, sampleCount = 24, startY = null, options = {}) {
   const bodyH = Number(dim.body_height_mm);
   const overallH = Number(dim.overall_height_mm);
   const overlap = Number(dim.head_neck_overlap_mm);
   const rNeck = Number(dim.neck_diameter_mm) * 0.5;
   const rHead = Number(dim.head_top_diameter_mm) * 0.5;
+  const curvatureScale = clamp(Number(options.curvatureScale ?? getHeadCurvatureScale()), 0.4, 1.7);
   const defaultStart = bodyH - overlap;
   const start = clamp(Number.isFinite(startY) ? startY : defaultStart, 0, overallH - 1);
   const span = Math.max(overallH - start, 1);
@@ -400,22 +526,29 @@ function buildHeadProfilePoints(dim, sampleCount = 24, startY = null) {
 
   for (let i = 0; i <= sampleCount; i += 1) {
     const t = smoothstep01(i / sampleCount);
+    const curvedT = clamp(Math.pow(t, 1 / curvatureScale), 0, 1);
     const y = start + (span * t);
-    const flare = Math.sin(Math.PI * t) * (rHead - rNeck) * 0.1;
-    const r = lerp(rNeck, rHead, t) + (flare * (1 - (t * 0.35)));
+    const flare = Math.sin(Math.PI * curvedT) * (rHead - rNeck) * (0.1 * curvatureScale);
+    const r = lerp(rNeck, rHead, curvedT) + (flare * (1 - (curvedT * 0.35)));
     points.push([Math.max(r, 4), y]);
   }
   return points;
 }
 
-function buildOuterProfilePoints(dim, bodySamples = 34, headSamples = 24) {
+function buildOuterProfilePoints(dim, bodySamples = 34, headSamples = 24, options = {}) {
   const body = buildBodyProfilePoints(dim, bodySamples);
-  const head = buildHeadProfilePoints(dim, headSamples, Number(dim.body_height_mm));
+  const head = buildHeadProfilePoints(dim, headSamples, Number(dim.body_height_mm), options);
   return [...body, ...head.slice(1)];
 }
 
 function toLatheProfile(points) {
   return points.map(([radius, y]) => new THREE.Vector2(Math.max(radius, 1), y));
+}
+
+function getProfileOptions() {
+  return {
+    curvatureScale: getHeadCurvatureScale(),
+  };
 }
 
 function updatePlaygroundValueLabels() {
@@ -1292,7 +1425,7 @@ function drawBlueprint() {
   const rMax = dim.body_max_diameter_mm * 0.5;
   const rNeck = dim.neck_diameter_mm * 0.5;
   const rHead = dim.head_top_diameter_mm * 0.5;
-  const sideProfile = buildOuterProfilePoints(dim, 42, 30);
+  const sideProfile = buildOuterProfilePoints(dim, 42, 30, getProfileOptions());
 
   const mapSide = (xMm, yMm) => [sideOx + xMm * scale, sideOy - yMm * scale];
 
@@ -1403,6 +1536,253 @@ function drawBlueprint() {
   addText(42, 42, "Blueprint Units: mm (inches shown in editable panel)", "#235767");
 }
 
+function drawPartPrints() {
+  const svg = els.partsPrintSvg;
+  if (!svg) {
+    return;
+  }
+  svg.innerHTML = "";
+  if (!state.blueprint) {
+    return;
+  }
+
+  const dim = state.blueprint.dimensions;
+  const panels = {
+    bottom: { x: 24, y: 30, w: 308, h: 288 },
+    flare: { x: 346, y: 30, w: 308, h: 288 },
+    rings: { x: 668, y: 30, w: 308, h: 288 },
+  };
+
+  const bg = createBlueprintSvgElement("rect", {
+    x: "0",
+    y: "0",
+    width: "1000",
+    height: "340",
+    fill: "#fff",
+  });
+  svg.appendChild(bg);
+
+  for (let x = 20; x <= 980; x += 20) {
+    svg.appendChild(createBlueprintSvgElement("line", {
+      x1: x,
+      y1: 20,
+      x2: x,
+      y2: 320,
+      stroke: x % 100 === 0 ? "#dde5ea" : "#eef3f5",
+      "stroke-width": x % 100 === 0 ? "1" : "0.7",
+    }));
+  }
+  for (let y = 20; y <= 320; y += 20) {
+    svg.appendChild(createBlueprintSvgElement("line", {
+      x1: 20,
+      y1: y,
+      x2: 980,
+      y2: y,
+      stroke: y % 100 === 0 ? "#dde5ea" : "#eef3f5",
+      "stroke-width": y % 100 === 0 ? "1" : "0.7",
+    }));
+  }
+
+  const addText = (x, y, text, size = 12, color = "#1d3b46") => {
+    const t = createBlueprintSvgElement("text", {
+      x: String(x),
+      y: String(y),
+      fill: color,
+      "font-size": String(size),
+      "font-family": "IBM Plex Mono, Consolas, monospace",
+    });
+    t.textContent = text;
+    svg.appendChild(t);
+  };
+
+  const addDimLine = (x1, y1, x2, y2, label) => {
+    svg.appendChild(createBlueprintSvgElement("line", {
+      x1: String(x1),
+      y1: String(y1),
+      x2: String(x2),
+      y2: String(y2),
+      stroke: "#1a4a59",
+      "stroke-width": "1.1",
+    }));
+    svg.appendChild(createBlueprintSvgElement("line", {
+      x1: String(x1 - 3),
+      y1: String(y1 - 3),
+      x2: String(x1 + 3),
+      y2: String(y1 + 3),
+      stroke: "#1a4a59",
+      "stroke-width": "1.1",
+    }));
+    svg.appendChild(createBlueprintSvgElement("line", {
+      x1: String(x2 - 3),
+      y1: String(y2 - 3),
+      x2: String(x2 + 3),
+      y2: String(y2 + 3),
+      stroke: "#1a4a59",
+      "stroke-width": "1.1",
+    }));
+    addText(((x1 + x2) * 0.5) + 4, ((y1 + y2) * 0.5) - 6, label, 11, "#0d5366");
+  };
+
+  Object.values(panels).forEach((p) => {
+    svg.appendChild(createBlueprintSvgElement("rect", {
+      x: String(p.x),
+      y: String(p.y),
+      width: String(p.w),
+      height: String(p.h),
+      fill: "rgba(245,249,251,0.4)",
+      stroke: "#c4d2da",
+      "stroke-width": "1.1",
+      rx: "10",
+      ry: "10",
+    }));
+  });
+
+  const bodyProfile = buildBodyProfilePoints(dim, 34);
+  const maxBodyR = Math.max(...bodyProfile.map((p) => p[0]), 10);
+  const bodyScale = Math.min((panels.bottom.w * 0.42) / maxBodyR, (panels.bottom.h * 0.78) / dim.body_height_mm);
+  const bodyOx = panels.bottom.x + (panels.bottom.w * 0.5);
+  const bodyOy = panels.bottom.y + (panels.bottom.h * 0.86);
+  let bodyPath = "";
+  bodyProfile.forEach((point, index) => {
+    const x = bodyOx + (point[0] * bodyScale);
+    const y = bodyOy - (point[1] * bodyScale);
+    bodyPath += `${index === 0 ? "M" : "L"}${x.toFixed(2)} ${y.toFixed(2)} `;
+  });
+  [...bodyProfile].reverse().forEach((point) => {
+    const x = bodyOx - (point[0] * bodyScale);
+    const y = bodyOy - (point[1] * bodyScale);
+    bodyPath += `L${x.toFixed(2)} ${y.toFixed(2)} `;
+  });
+  bodyPath += "Z";
+  svg.appendChild(createBlueprintSvgElement("path", {
+    d: bodyPath,
+    fill: "rgba(15,116,140,0.08)",
+    stroke: "#0d5162",
+    "stroke-width": "1.7",
+  }));
+  addText(panels.bottom.x + 12, panels.bottom.y + 20, "BOTTOM VESSEL", 12, "#0d4252");
+  addDimLine(
+    bodyOx - (maxBodyR * bodyScale) - 24,
+    bodyOy,
+    bodyOx - (maxBodyR * bodyScale) - 24,
+    bodyOy - (dim.body_height_mm * bodyScale),
+    `${formatNumber(dim.body_height_mm, 1)} mm`,
+  );
+  addDimLine(
+    bodyOx - ((dim.body_max_diameter_mm * 0.5) * bodyScale),
+    bodyOy + 18,
+    bodyOx + ((dim.body_max_diameter_mm * 0.5) * bodyScale),
+    bodyOy + 18,
+    `${formatNumber(dim.body_max_diameter_mm, 1)} mm`,
+  );
+
+  const headProfileAbs = buildHeadProfilePoints(
+    dim,
+    30,
+    Number(dim.body_height_mm),
+    getProfileOptions(),
+  );
+  const flareProfile = headProfileAbs.map(([r, y]) => [r, y - Number(dim.body_height_mm)]);
+  const flareH = Math.max(Number(dim.head_height_mm), 1);
+  const flareMaxR = Math.max(...flareProfile.map((p) => p[0]), 10);
+  const flareScale = Math.min((panels.flare.w * 0.42) / flareMaxR, (panels.flare.h * 0.74) / flareH);
+  const flareOx = panels.flare.x + (panels.flare.w * 0.5);
+  const flareOy = panels.flare.y + (panels.flare.h * 0.86);
+  let flarePath = "";
+  flareProfile.forEach((point, index) => {
+    const x = flareOx + (point[0] * flareScale);
+    const y = flareOy - (point[1] * flareScale);
+    flarePath += `${index === 0 ? "M" : "L"}${x.toFixed(2)} ${y.toFixed(2)} `;
+  });
+  [...flareProfile].reverse().forEach((point) => {
+    const x = flareOx - (point[0] * flareScale);
+    const y = flareOy - (point[1] * flareScale);
+    flarePath += `L${x.toFixed(2)} ${y.toFixed(2)} `;
+  });
+  flarePath += "Z";
+  svg.appendChild(createBlueprintSvgElement("path", {
+    d: flarePath,
+    fill: "rgba(15,116,140,0.08)",
+    stroke: "#0d5162",
+    "stroke-width": "1.7",
+  }));
+  addText(panels.flare.x + 12, panels.flare.y + 20, "HEAD FLARE", 12, "#0d4252");
+  addDimLine(
+    flareOx - ((dim.neck_diameter_mm * 0.5) * flareScale),
+    flareOy + 18,
+    flareOx + ((dim.neck_diameter_mm * 0.5) * flareScale),
+    flareOy + 18,
+    `${formatNumber(dim.neck_diameter_mm, 1)} mm neck`,
+  );
+  addDimLine(
+    flareOx - ((dim.head_top_diameter_mm * 0.5) * flareScale),
+    flareOy - (flareH * flareScale) - 14,
+    flareOx + ((dim.head_top_diameter_mm * 0.5) * flareScale),
+    flareOy - (flareH * flareScale) - 14,
+    `${formatNumber(dim.head_top_diameter_mm, 1)} mm`,
+  );
+  addText(
+    panels.flare.x + 12,
+    panels.flare.y + panels.flare.h - 12,
+    `Curvature ${formatNumber(getHeadCurvatureScale() * 100, 0)}%`,
+    11,
+    "#2f5b6a",
+  );
+
+  const ringsCenterX = panels.rings.x + (panels.rings.w * 0.5);
+  const gasketCy = panels.rings.y + 102;
+  const strainerCy = panels.rings.y + 214;
+  const ringScale = Math.min(
+    (panels.rings.w * 0.34) / Math.max(dim.neck_diameter_mm * 0.5, dim.insert_outer_diameter_mm * 0.5),
+    1.8,
+  );
+
+  const gasketOuterR = (dim.neck_diameter_mm * 0.5 + dim.gasket_cross_section_mm) * ringScale;
+  const gasketInnerR = Math.max((dim.neck_diameter_mm * 0.5 - dim.gasket_cross_section_mm) * ringScale, 4);
+  svg.appendChild(createBlueprintSvgElement("circle", {
+    cx: String(ringsCenterX),
+    cy: String(gasketCy),
+    r: gasketOuterR.toFixed(2),
+    fill: "rgba(15,116,140,0.05)",
+    stroke: "#0d5162",
+    "stroke-width": "1.6",
+  }));
+  svg.appendChild(createBlueprintSvgElement("circle", {
+    cx: String(ringsCenterX),
+    cy: String(gasketCy),
+    r: gasketInnerR.toFixed(2),
+    fill: "#fff",
+    stroke: "#0d5162",
+    "stroke-width": "1.4",
+  }));
+
+  const strainerOuterR = (dim.insert_outer_diameter_mm * 0.5) * ringScale;
+  const strainerInnerR = (dim.insert_inner_diameter_mm * 0.5) * ringScale;
+  svg.appendChild(createBlueprintSvgElement("circle", {
+    cx: String(ringsCenterX),
+    cy: String(strainerCy),
+    r: strainerOuterR.toFixed(2),
+    fill: "rgba(15,116,140,0.05)",
+    stroke: "#0d5162",
+    "stroke-width": "1.6",
+  }));
+  svg.appendChild(createBlueprintSvgElement("circle", {
+    cx: String(ringsCenterX),
+    cy: String(strainerCy),
+    r: strainerInnerR.toFixed(2),
+    fill: "#fff",
+    stroke: "#0d5162",
+    "stroke-width": "1.4",
+  }));
+
+  addText(panels.rings.x + 12, panels.rings.y + 20, "GASKET + STRAINER", 12, "#0d4252");
+  addText(panels.rings.x + 20, panels.rings.y + 132, `Gasket OD: ${formatNumber((gasketOuterR * 2) / ringScale, 1)} mm`, 11, "#2f5b6a");
+  addText(panels.rings.x + 20, panels.rings.y + 248, `Strainer OD: ${formatNumber(dim.insert_outer_diameter_mm, 1)} mm`, 11, "#2f5b6a");
+  addText(panels.rings.x + 20, panels.rings.y + 266, `Strainer ID: ${formatNumber(dim.insert_inner_diameter_mm, 1)} mm`, 11, "#2f5b6a");
+
+  addText(28, 18, "DETACHED PART PRINTS - mm", 12, "#1d4d5c");
+}
+
 function buildTeapotGroup(dim) {
   const group = new THREE.Group();
   const palette = resolveThreeMaterialPalette();
@@ -1435,6 +1815,7 @@ function buildTeapotGroup(dim) {
 
   const bodyH = dim.body_height_mm;
   const overallH = dim.overall_height_mm;
+  const profileOptions = getProfileOptions();
 
   const rHead = dim.head_top_diameter_mm * 0.5;
   const rNeck = dim.neck_diameter_mm * 0.5;
@@ -1448,7 +1829,7 @@ function buildTeapotGroup(dim) {
   group.add(bodyMesh);
 
   const headStart = bodyH - dim.head_neck_overlap_mm;
-  const headProfile = toLatheProfile(buildHeadProfilePoints(dim, 34, headStart));
+  const headProfile = toLatheProfile(buildHeadProfilePoints(dim, 34, headStart, profileOptions));
   const headGeo = new THREE.LatheGeometry(headProfile, 96);
   const headMesh = new THREE.Mesh(headGeo, steel);
   headMesh.castShadow = true;
@@ -1516,6 +1897,18 @@ function buildTeapotGroup(dim) {
   handleMesh.castShadow = true;
   handleMesh.name = "handle";
   group.add(handleMesh);
+
+  const bottomOffset = getPartOffsetVector(dim, "bottom");
+  const flareOffset = getPartOffsetVector(dim, "flare");
+  const gasketOffset = getPartOffsetVector(dim, "gasket");
+  const strainerOffset = getPartOffsetVector(dim, "strainer");
+
+  bodyMesh.position.add(bottomOffset);
+  baseMesh.position.add(bottomOffset);
+  headMesh.position.add(flareOffset);
+  handleMesh.position.add(flareOffset);
+  gasketMesh.position.add(gasketOffset);
+  insertMesh.position.add(strainerOffset);
 
   const centeringBox = new THREE.Box3().setFromObject(group);
   const center = centeringBox.getCenter(new THREE.Vector3());
@@ -1616,6 +2009,8 @@ function initThree() {
   state.three.renderer = renderer;
   state.three.controls = controls;
   syncThreeMaterialInputs();
+  syncThreeDetachInputs();
+  syncThreeFlareInputs();
 
   const resize = () => {
     const width = els.threeCanvas.clientWidth;
@@ -1642,6 +2037,7 @@ function renderAll() {
   renderMaterials();
   renderBom();
   drawBlueprint();
+  drawPartPrints();
   renderThreeModel();
 
   if (state.blueprint) {
@@ -1704,6 +2100,7 @@ async function loadDefaultBlueprint() {
   state.blueprint = payload.blueprint;
   state.analysis = payload.analysis;
   initPlaygroundFromBlueprint();
+  resetThreeFormControls();
   renderAll();
   await generatePrototype();
   setStatus("Blueprint baseline loaded from image analysis.", "ok");
@@ -1908,6 +2305,7 @@ async function applyQuickShape(action) {
     case "reset":
       state.blueprint.dimensions = createDefaultDimensions(cups);
       initPlaygroundFromBlueprint();
+      resetThreeFormControls();
       try {
         await recomputeBlueprint("3D shape reset.");
       } catch (error) {
@@ -1971,6 +2369,119 @@ function downloadBlob(blob, fileName) {
   URL.revokeObjectURL(objectUrl);
 }
 
+async function svgElementToPngDataUrl(svgElement, width, height) {
+  if (!svgElement) {
+    throw new Error("SVG element is not available.");
+  }
+  const serializer = new XMLSerializer();
+  const source = serializer.serializeToString(svgElement);
+  const svgBlob = new Blob([source], { type: "image/svg+xml;charset=utf-8" });
+  const objectUrl = URL.createObjectURL(svgBlob);
+
+  try {
+    const image = await new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error("Failed to rasterize SVG for PPTX."));
+      img.src = objectUrl;
+    });
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, width, height);
+    ctx.drawImage(image, 0, 0, width, height);
+    return canvas.toDataURL("image/png");
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+function currentDetachSummary() {
+  const detach = state.three.detachState;
+  const enabled = [];
+  if (detach.bottom) enabled.push("Bottom vessel");
+  if (detach.flare) enabled.push("Head flare");
+  if (detach.gasket) enabled.push("Gasket");
+  if (detach.strainer) enabled.push("Strainer");
+  if (!enabled.length) {
+    return "None";
+  }
+  return enabled.join(", ");
+}
+
+async function exportPptxLocal(timestamp) {
+  const PptxGenJS = window.PptxGenJS;
+  if (!PptxGenJS) {
+    throw new Error("PPTX library could not be loaded.");
+  }
+  if (!state.blueprint) {
+    throw new Error("Load a blueprint before exporting.");
+  }
+
+  drawBlueprint();
+  drawPartPrints();
+
+  const blueprintPng = await svgElementToPngDataUrl(els.blueprintSvg, 1800, 840);
+  const partsPng = await svgElementToPngDataUrl(els.partsPrintSvg, 1800, 620);
+  const previewPng = state.three.renderer?.domElement?.toDataURL?.("image/png") || null;
+
+  const dim = state.blueprint.dimensions;
+  const pptx = new PptxGenJS();
+  pptx.layout = "LAYOUT_WIDE";
+  pptx.author = "Curved Head Teapot Blueprint Tool";
+  pptx.subject = "Teapot manufacturing blueprint";
+  pptx.title = "Curved Head Teapot Blueprint";
+
+  const slide1 = pptx.addSlide();
+  slide1.background = { color: "F5F9FB" };
+  slide1.addText("Curved Head Teapot Blueprint", {
+    x: 0.3, y: 0.2, w: 8.8, h: 0.35, bold: true, fontSize: 20, color: "124556",
+  });
+  slide1.addText(`Generated ${new Date().toISOString().slice(0, 19).replace("T", " ")}`, {
+    x: 0.3, y: 0.56, w: 4.5, h: 0.22, fontSize: 10, color: "3B6170",
+  });
+
+  if (previewPng) {
+    slide1.addImage({ data: previewPng, x: 0.3, y: 0.9, w: 5.9, h: 3.5 });
+  }
+  slide1.addImage({ data: blueprintPng, x: 6.3, y: 0.9, w: 6.7, h: 3.5 });
+
+  slide1.addText(
+    [
+      `Overall Height: ${formatNumber(dim.overall_height_mm, 1)} mm (${formatNumber(mmToIn(dim.overall_height_mm), 2)} in)`,
+      `Head Top Diameter: ${formatNumber(dim.head_top_diameter_mm, 1)} mm`,
+      `Body Max Diameter: ${formatNumber(dim.body_max_diameter_mm, 1)} mm`,
+      `Neck Diameter: ${formatNumber(dim.neck_diameter_mm, 1)} mm`,
+      `Estimated Capacity: ${formatNumber(dim.estimated_capacity_ml, 1)} ml`,
+      `Head Curvature: ${formatNumber(getHeadCurvatureScale() * 100, 0)}%`,
+      `Detached Parts: ${currentDetachSummary()}`,
+    ].join("\n"),
+    {
+      x: 0.3, y: 4.55, w: 6.2, h: 2.6, fontSize: 11, color: "1F4E5D",
+      breakLine: true,
+    },
+  );
+
+  slide1.addText(
+    "Includes editable 3D exploded view with detachable bottom vessel, flare, gasket, and strainer.",
+    {
+      x: 6.6, y: 4.55, w: 6.5, h: 0.8, fontSize: 11, color: "1F4E5D", breakLine: true,
+    },
+  );
+
+  const slide2 = pptx.addSlide();
+  slide2.background = { color: "F5F9FB" };
+  slide2.addText("Detached Part 2D Prints", {
+    x: 0.3, y: 0.22, w: 6.4, h: 0.35, bold: true, fontSize: 20, color: "124556",
+  });
+  slide2.addImage({ data: partsPng, x: 0.3, y: 0.85, w: 12.7, h: 5.9 });
+
+  await pptx.writeFile({ fileName: `teapot_blueprint_${timestamp}.pptx` });
+}
+
 function buildDxfLocal(blueprint) {
   const d = blueprint.dimensions;
   const lines = [];
@@ -1994,7 +2505,7 @@ function buildDxfLocal(blueprint) {
   const rBottom = d.body_bottom_diameter_mm * 0.5;
   const rNeck = d.neck_diameter_mm * 0.5;
   const rHead = d.head_top_diameter_mm * 0.5;
-  const p = buildOuterProfilePoints(d, 44, 30);
+  const p = buildOuterProfilePoints(d, 44, 30, getProfileOptions());
   for (let i = 0; i < p.length - 1; i += 1) {
     addLine(p[i][0], p[i][1], p[i + 1][0], p[i + 1][1], "SIDE");
     addLine(-p[i][0], p[i][1], -p[i + 1][0], p[i + 1][1], "SIDE");
@@ -2022,7 +2533,7 @@ function buildDxfLocal(blueprint) {
 
 function buildObjLocal(blueprint) {
   const d = blueprint.dimensions;
-  const profile = buildOuterProfilePoints(d, 44, 30);
+  const profile = buildOuterProfilePoints(d, 44, 30, getProfileOptions());
   const seg = 56;
   const verts = [];
   const faces = [];
@@ -2112,7 +2623,7 @@ async function generatePrototypeLocalImage() {
   const ox = 840;
   const oy = 730;
   const scale = Math.min(2.0, 320 / Math.max(dim.head_top_diameter_mm, dim.body_max_diameter_mm));
-  const prof = buildOuterProfilePoints(dim, 44, 30);
+  const prof = buildOuterProfilePoints(dim, 44, 30, getProfileOptions());
   const map = (x, y) => [ox + x * scale, oy - y * scale];
   ctx.beginPath();
   prof.forEach((p, i) => {
@@ -2226,7 +2737,8 @@ async function exportBlueprint(format) {
         return;
       }
       if (format === "pptx") {
-        setStatus("PPTX export requires backend hosting. Use JSON/DXF/OBJ in free static mode.", "warn");
+        await exportPptxLocal(timestamp);
+        setStatus("Exported PPTX (local mode).", "ok");
         return;
       }
     } catch (error) {
@@ -2236,6 +2748,17 @@ async function exportBlueprint(format) {
   }
 
   try {
+    if (format === "pptx") {
+      try {
+        const timestamp = new Date().toISOString().replace(/[-:TZ.]/g, "").slice(0, 14);
+        await exportPptxLocal(timestamp);
+        setStatus("Exported PPTX from interactive blueprint.", "ok");
+        return;
+      } catch {
+        // Fall back to backend route if frontend PPTX generation is unavailable.
+      }
+    }
+
     const response = await fetch(`/api/export/${format}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2330,6 +2853,62 @@ function bindEvents() {
     els.threeRoughness.addEventListener("change", onCustomMaterialInput);
   }
 
+  const onDetachControlInput = () => {
+    state.three.detachState.distancePct = Number.parseInt(els.threeDetachDistance?.value || "0", 10) || 0;
+    state.three.detachState.bottom = Boolean(els.detachBottomToggle?.checked);
+    state.three.detachState.flare = Boolean(els.detachFlareToggle?.checked);
+    state.three.detachState.gasket = Boolean(els.detachGasketToggle?.checked);
+    state.three.detachState.strainer = Boolean(els.detachStrainerToggle?.checked);
+    syncThreeDetachInputs();
+    renderThreeModel();
+  };
+
+  [els.threeDetachDistance, els.detachBottomToggle, els.detachFlareToggle, els.detachGasketToggle, els.detachStrainerToggle]
+    .filter(Boolean)
+    .forEach((input) => {
+      input.addEventListener("input", onDetachControlInput);
+      input.addEventListener("change", onDetachControlInput);
+    });
+
+  const onHeadCurvatureInput = () => {
+    state.three.flareState.curvaturePct = Number.parseInt(els.threeHeadCurvature?.value || "100", 10) || 100;
+    syncThreeFlareInputs();
+    drawBlueprint();
+    drawPartPrints();
+    renderThreeModel();
+  };
+
+  if (els.threeHeadCurvature) {
+    els.threeHeadCurvature.addEventListener("input", onHeadCurvatureInput);
+    els.threeHeadCurvature.addEventListener("change", onHeadCurvatureInput);
+  }
+
+  const onHeadSizeInput = (commit) => {
+    if (!state.blueprint?.dimensions) {
+      return;
+    }
+    const nextPct = Number.parseInt(els.threeHeadFlareSize?.value || "100", 10) || 100;
+    const prevPct = Math.max(Number(state.three.flareState.lastAppliedSizePct || 100), 1);
+    const ratio = clamp(nextPct / prevPct, 0.5, 1.7);
+    state.three.flareState.sizePct = nextPct;
+    state.three.flareState.lastAppliedSizePct = nextPct;
+    applyHeadFlareSizeRatio(ratio);
+    syncThreeFlareInputs();
+    drawBlueprint();
+    drawPartPrints();
+    renderThreeModel();
+    if (commit) {
+      queueRecompute(true);
+      return;
+    }
+    queueRecompute(false);
+  };
+
+  if (els.threeHeadFlareSize) {
+    els.threeHeadFlareSize.addEventListener("input", () => onHeadSizeInput(false));
+    els.threeHeadFlareSize.addEventListener("change", () => onHeadSizeInput(true));
+  }
+
   document.querySelectorAll("[data-quick-shape]").forEach((button) => {
     button.addEventListener("click", () => {
       const action = button.getAttribute("data-quick-shape");
@@ -2386,6 +2965,7 @@ function bindEvents() {
 
 async function bootstrap() {
   applyThreeMaterialPreset(state.three.materialState.preset, false);
+  resetThreeFormControls();
   initThree();
   bindEvents();
 

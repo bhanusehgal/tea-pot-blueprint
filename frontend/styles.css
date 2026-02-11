@@ -376,6 +376,50 @@ button:active {
   accent-color: #0f748c;
 }
 
+.three-shape,
+.three-explode {
+  border: 1px dashed rgba(15, 116, 140, 0.28);
+  border-radius: 10px;
+  padding: 8px;
+  margin-bottom: 8px;
+  background: rgba(246, 251, 252, 0.78);
+}
+
+.three-shape__title,
+.three-explode__title {
+  color: #194d5d;
+  font-size: 0.81rem;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.three-shape__grid,
+.three-explode__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(165px, 1fr));
+  gap: 8px;
+}
+
+.three-shape__grid label,
+.three-explode__grid label {
+  gap: 5px;
+  font-size: 0.78rem;
+}
+
+.three-shape__grid input[type="range"],
+.three-explode__grid input[type="range"] {
+  width: 100%;
+  min-width: 0;
+  accent-color: #0f748c;
+}
+
+.three-explode__toggles {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 4px 8px;
+}
+
 .three-tools__buttons {
   display: flex;
   flex-wrap: wrap;
@@ -388,6 +432,14 @@ button:active {
   border: 1px solid rgba(16, 32, 40, 0.18);
   border-radius: 12px;
   background: #ffffff;
+}
+
+.blueprint-note {
+  margin-top: 10px;
+}
+
+#partsPrintSvg {
+  min-height: 290px;
 }
 
 .prototype-note {

@@ -111,6 +111,49 @@
                   </label>
                 </div>
               </div>
+              <div class="three-shape">
+                <div class="three-shape__title">Head Flare Tuning</div>
+                <div class="three-shape__grid">
+                  <label>
+                    Flare Size
+                    <input id="threeHeadFlareSize" type="range" min="55" max="145" value="100" />
+                    <span id="threeHeadFlareSizeVal" class="play-value">100%</span>
+                  </label>
+                  <label>
+                    Flare Curvature
+                    <input id="threeHeadCurvature" type="range" min="40" max="170" value="100" />
+                    <span id="threeHeadCurvatureVal" class="play-value">100%</span>
+                  </label>
+                </div>
+              </div>
+              <div class="three-explode">
+                <div class="three-explode__title">Detached Part View</div>
+                <div class="three-explode__grid">
+                  <label>
+                    Detach Distance
+                    <input id="threeDetachDistance" type="range" min="0" max="100" value="38" />
+                    <span id="threeDetachDistanceVal" class="play-value">38%</span>
+                  </label>
+                </div>
+                <div class="three-explode__toggles">
+                  <label class="three-tools__toggle">
+                    <input id="detachBottomToggle" type="checkbox" />
+                    Bottom vessel
+                  </label>
+                  <label class="three-tools__toggle">
+                    <input id="detachFlareToggle" type="checkbox" />
+                    Head flare
+                  </label>
+                  <label class="three-tools__toggle">
+                    <input id="detachGasketToggle" type="checkbox" />
+                    Sealing ring / gasket
+                  </label>
+                  <label class="three-tools__toggle">
+                    <input id="detachStrainerToggle" type="checkbox" />
+                    Internal strainer
+                  </label>
+                </div>
+              </div>
               <div class="three-tools__buttons">
                 <button class="ghost-btn" data-quick-shape="wider">Wider Body</button>
                 <button class="ghost-btn" data-quick-shape="taller">Taller Vessel</button>
@@ -191,6 +234,8 @@
               <span id="capacityLabel" class="badge">Capacity: --</span>
             </div>
             <svg id="blueprintSvg" viewBox="0 0 1000 470" preserveAspectRatio="xMidYMid meet"></svg>
+            <p class="prototype-note blueprint-note">Detached component prints with manufacturing dimensions.</p>
+            <svg id="partsPrintSvg" viewBox="0 0 1000 340" preserveAspectRatio="xMidYMid meet"></svg>
           </div>
 
           <div class="card export-card">
@@ -208,6 +253,7 @@
       </main>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
     <script type="module" src="/assets/app.js"></script>
   </body>
 </html>
