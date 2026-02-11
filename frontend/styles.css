@@ -138,6 +138,13 @@ button:active {
   align-content: start;
 }
 
+.preview-structure-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.18fr) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
 .panel-block {
   padding: 14px;
 }
@@ -300,7 +307,7 @@ button:active {
 
 .three-canvas {
   width: 100%;
-  min-height: 470px;
+  min-height: 420px;
   border-radius: 12px;
   border: 1px solid rgba(16, 32, 40, 0.2);
   overflow: hidden;
@@ -555,6 +562,10 @@ button:active {
 
 @media (max-width: 1180px) {
   .layout-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .preview-structure-row {
     grid-template-columns: 1fr;
   }
 

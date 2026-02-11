@@ -65,7 +65,8 @@
         </section>
 
         <section class="right-column">
-          <div class="card viewer-card">
+          <div class="preview-structure-row">
+            <div class="card viewer-card">
             <div class="panel-title-row">
               <h2>3D Model Preview</h2>
               <span class="hint">Drag: rotate, Scroll: zoom, Shift+Drag: pan</span>
@@ -101,8 +102,8 @@
                   </label>
                   <label>
                     Metalness
-                    <input id="threeMetalness" type="range" min="0" max="100" value="86" />
-                    <span id="threeMetalnessVal" class="play-value">86%</span>
+                    <input id="threeMetalness" type="range" min="0" max="100" value="0" />
+                    <span id="threeMetalnessVal" class="play-value">0%</span>
                   </label>
                   <label>
                     Roughness
@@ -163,9 +164,9 @@
                 <button class="ghost-btn" data-quick-shape="reset">Reset 3D Shape</button>
               </div>
             </div>
-          </div>
+            </div>
 
-          <div class="card structure-card">
+            <div class="card structure-card">
             <div class="panel-title-row">
               <h2>Structure Playground</h2>
               <span class="hint">Editable morph controls</span>
@@ -213,6 +214,7 @@
               <button id="shapeResetBtn" class="ghost-btn">Reset Morph</button>
               <button id="shapeSetBaseBtn" class="ghost-btn">Use Current as Baseline</button>
               <button id="shapeApplyBtn">Apply + Regenerate Prototype</button>
+            </div>
             </div>
           </div>
 

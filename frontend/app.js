@@ -41,9 +41,9 @@ const state = {
       lastAppliedSizePct: 100,
     },
     materialState: {
-      preset: "stainless-brushed",
+      preset: "custom",
       primaryColor: "#c9d0d4",
-      metalness: 0.86,
+      metalness: 0,
       roughness: 0.22,
     },
   },
@@ -444,6 +444,18 @@ function applyHeadFlareSizeRatio(ratio) {
 }
 
 function applyThreeMaterialPreset(presetKey, rerender = true) {
+  if (presetKey === "custom") {
+    state.three.materialState.preset = "custom";
+    state.three.materialState.primaryColor = normalizeHexColor(state.three.materialState.primaryColor);
+    state.three.materialState.metalness = clamp01(state.three.materialState.metalness);
+    state.three.materialState.roughness = clamp01(state.three.materialState.roughness);
+    syncThreeMaterialInputs();
+    if (rerender && state.blueprint) {
+      renderThreeModel();
+    }
+    return;
+  }
+
   const resolvedKey = (presetKey in THREE_MATERIAL_PRESETS) ? presetKey : "stainless-brushed";
   const preset = getThreeMaterialPreset(resolvedKey);
   state.three.materialState.preset = resolvedKey;
