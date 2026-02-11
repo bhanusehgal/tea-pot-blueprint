@@ -71,6 +71,23 @@
               <span class="hint">Drag: rotate, Scroll: zoom, Shift+Drag: pan</span>
             </div>
             <div id="threeCanvas" class="three-canvas"></div>
+            <div class="three-tools">
+              <div class="three-tools__row">
+                <span class="three-tools__label">3D Quick Controls</span>
+                <label class="three-tools__toggle">
+                  <input id="threeAutoRotate" type="checkbox" />
+                  Auto rotate
+                </label>
+              </div>
+              <div class="three-tools__buttons">
+                <button class="ghost-btn" data-quick-shape="wider">Wider Body</button>
+                <button class="ghost-btn" data-quick-shape="taller">Taller Vessel</button>
+                <button class="ghost-btn" data-quick-shape="flare">More Head Flare</button>
+                <button class="ghost-btn" data-quick-shape="neck">Tighter Neck</button>
+                <button class="ghost-btn" data-quick-shape="handle">Longer Handle</button>
+                <button class="ghost-btn" data-quick-shape="reset">Reset 3D Shape</button>
+              </div>
+            </div>
           </div>
 
           <div class="card structure-card">

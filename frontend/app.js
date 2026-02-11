@@ -108,6 +108,7 @@ const els = {
   generatePrototypeBtn: document.getElementById("generatePrototypeBtn"),
   prototypeImage: document.getElementById("prototypeImage"),
   prototypeMeta: document.getElementById("prototypeMeta"),
+  threeAutoRotate: document.getElementById("threeAutoRotate"),
   shapeBodyCurve: document.getElementById("shapeBodyCurve"),
   shapeHeadFlare: document.getElementById("shapeHeadFlare"),
   shapeHeight: document.getElementById("shapeHeight"),
@@ -1310,6 +1311,8 @@ function initThree() {
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.enablePan = true;
+  controls.autoRotate = false;
+  controls.autoRotateSpeed = 0.9;
   controls.target.set(0, 44, 0);
 
   const hemi = new THREE.HemisphereLight(0xf1f7fa, 0x8ba0ab, 0.95);
@@ -1589,6 +1592,80 @@ async function applyPlaygroundMorph(maintainCapacity) {
     }
   } catch (error) {
     setStatus(`Structure update error: ${error.message}`, "warn");
+  }
+}
+
+async function applyQuickShape(action) {
+  if (!state.blueprint?.dimensions) {
+    return;
+  }
+
+  const dim = state.blueprint.dimensions;
+  const cups = Number(dim.cups_target || 4);
+
+  const bump = (key, ratio) => {
+    if (!(key in dim)) {
+      return;
+    }
+    dim[key] = Number(dim[key]) * ratio;
+  };
+
+  switch (action) {
+    case "wider":
+      bump("body_max_diameter_mm", 1.08);
+      bump("body_bottom_diameter_mm", 1.05);
+      bump("neck_diameter_mm", 1.02);
+      break;
+    case "taller":
+      bump("body_height_mm", 1.08);
+      bump("head_height_mm", 1.05);
+      bump("handle_drop_mm", 1.04);
+      break;
+    case "flare":
+      bump("head_top_diameter_mm", 1.10);
+      bump("head_height_mm", 1.04);
+      break;
+    case "neck":
+      bump("neck_diameter_mm", 0.92);
+      bump("insert_outer_diameter_mm", 0.95);
+      break;
+    case "handle":
+      bump("handle_length_mm", 1.12);
+      bump("handle_offset_mm", 1.07);
+      bump("handle_thickness_mm", 1.03);
+      break;
+    case "reset":
+      state.blueprint.dimensions = createDefaultDimensions(cups);
+      initPlaygroundFromBlueprint();
+      try {
+        await recomputeBlueprint("3D shape reset.");
+      } catch (error) {
+        setStatus(`Quick shape error: ${error.message}`, "warn");
+      }
+      return;
+    default:
+      return;
+  }
+
+  dim.neck_diameter_mm = clamp(Number(dim.neck_diameter_mm), 40, Number(dim.body_max_diameter_mm) * 0.95);
+  dim.head_top_diameter_mm = clamp(Number(dim.head_top_diameter_mm), Number(dim.neck_diameter_mm) + 10, 250);
+  dim.body_bottom_diameter_mm = clamp(Number(dim.body_bottom_diameter_mm), 55, Number(dim.body_max_diameter_mm));
+  dim.insert_outer_diameter_mm = clamp(
+    Number(dim.insert_outer_diameter_mm),
+    24,
+    Number(dim.neck_diameter_mm) - 6,
+  );
+  dim.insert_inner_diameter_mm = clamp(
+    Number(dim.insert_inner_diameter_mm),
+    10,
+    Number(dim.insert_outer_diameter_mm) - 6,
+  );
+
+  try {
+    await recomputeBlueprint("3D shape updated.");
+    capturePlaygroundBase();
+  } catch (error) {
+    setStatus(`Quick shape error: ${error.message}`, "warn");
   }
 }
 
@@ -1966,6 +2043,20 @@ function bindEvents() {
   els.applyAnalysisBtn.addEventListener("click", applyAnalysisMaterials);
   els.generatePrototypeBtn.addEventListener("click", () => {
     generatePrototype();
+  });
+  if (els.threeAutoRotate) {
+    els.threeAutoRotate.addEventListener("change", () => {
+      if (state.three.controls) {
+        state.three.controls.autoRotate = Boolean(els.threeAutoRotate.checked);
+      }
+    });
+  }
+
+  document.querySelectorAll("[data-quick-shape]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const action = button.getAttribute("data-quick-shape");
+      applyQuickShape(action);
+    });
   });
 
   const sliderMap = [
