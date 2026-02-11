@@ -1,0 +1,171 @@
+{
+  "title": "Curved-Head Teapot Blueprint",
+  "design_version": "v1",
+  "units": "mm",
+  "dimensions": {
+    "cups_target": 4.0,
+    "capacity_target_ml": 946.4,
+    "estimated_capacity_ml": 946.3,
+    "wall_thickness_mm": 0.78,
+    "manufacturing_tolerance_mm": 0.22,
+    "body_height_mm": 107.91,
+    "body_max_diameter_mm": 100.14,
+    "body_bottom_diameter_mm": 77.69,
+    "neck_diameter_mm": 72.51,
+    "head_height_mm": 50.07,
+    "head_top_diameter_mm": 129.49,
+    "head_neck_overlap_mm": 8.63,
+    "handle_length_mm": 79.42,
+    "handle_drop_mm": 56.97,
+    "handle_offset_mm": 17.27,
+    "handle_thickness_mm": 12.09,
+    "insert_outer_diameter_mm": 48.34,
+    "insert_inner_diameter_mm": 31.08,
+    "insert_height_mm": 22.44,
+    "gasket_cross_section_mm": 2.59,
+    "base_cap_height_mm": 5.18,
+    "base_cap_diameter_mm": 75.97,
+    "overall_height_mm": 149.35
+  },
+  "materials": [
+    {
+      "part_key": "body_shell",
+      "part_name": "Lower vessel body shell",
+      "recommended": "Stainless Steel 304 (0.9 mm)",
+      "alternatives": [
+        "Stainless Steel 316L (0.9 mm)",
+        "Stainless Steel 430 (1.0 mm)"
+      ],
+      "selected": "Stainless Steel 304 (0.9 mm)",
+      "confidence": 0.8550286108529619,
+      "notes": "Deep-draw + spin forming friendly and food safe."
+    },
+    {
+      "part_key": "curved_head",
+      "part_name": "Curved upper head / funnel section",
+      "recommended": "Stainless Steel 304 (0.9 mm)",
+      "alternatives": [
+        "Stainless Steel 316L (0.9 mm)",
+        "Stainless Steel 430 (1.0 mm)"
+      ],
+      "selected": "Stainless Steel 304 (0.9 mm)",
+      "confidence": 0.8250286108529619,
+      "notes": "Spin form and trim rolled lip for curved head profile."
+    },
+    {
+      "part_key": "handle",
+      "part_name": "External handle",
+      "recommended": "Glass-filled Nylon 66, heat-resistant",
+      "alternatives": [
+        "Bakelite / Phenolic resin",
+        "Stainless handle with silicone sleeve"
+      ],
+      "selected": "Glass-filled Nylon 66, heat-resistant",
+      "confidence": 0.6112129647602291,
+      "notes": "Thermal isolation from vessel body."
+    },
+    {
+      "part_key": "insert_filter",
+      "part_name": "Center insert / filter collar",
+      "recommended": "Stainless Steel 304 + 80 mesh screen",
+      "alternatives": [
+        "Stainless Steel 316L + 100 mesh screen",
+        "Perforated stainless disc"
+      ],
+      "selected": "Stainless Steel 304 + 80 mesh screen",
+      "confidence": 0.7950286108529618,
+      "notes": "Keeps tea leaves from pouring path."
+    },
+    {
+      "part_key": "gasket",
+      "part_name": "Sealing ring / gasket",
+      "recommended": "Food-grade Silicone (Shore A 50-60)",
+      "alternatives": [
+        "EPDM food-grade",
+        "Fluorosilicone (premium)"
+      ],
+      "selected": "Food-grade Silicone (Shore A 50-60)",
+      "confidence": 0.33404622219322666,
+      "notes": "Compensates tolerance stack and seals head/body interface."
+    },
+    {
+      "part_key": "base_cap",
+      "part_name": "Bottom cap / base ring",
+      "recommended": "Stainless Steel 304 (1.0 mm)",
+      "alternatives": [
+        "Stainless Steel 430 (1.0 mm)",
+        "Stainless Steel 316L (1.0 mm)"
+      ],
+      "selected": "Stainless Steel 304 (1.0 mm)",
+      "confidence": 0.7550286108529619,
+      "notes": "Reinforces base and protects seam edge."
+    }
+  ],
+  "bom": [
+    {
+      "part_key": "body_shell",
+      "part_name": "Lower vessel body shell",
+      "material": "Stainless Steel 304 (0.9 mm)",
+      "process": "Deep draw + neck reduction + brushing",
+      "thickness_mm": 0.78,
+      "quantity": 1,
+      "mass_estimate_g": 198.5,
+      "notes": "TIG seam only if split blank is used."
+    },
+    {
+      "part_key": "curved_head",
+      "part_name": "Curved upper head / funnel section",
+      "material": "Stainless Steel 304 (0.9 mm)",
+      "process": "Spin forming + lip trim",
+      "thickness_mm": 0.78,
+      "quantity": 1,
+      "mass_estimate_g": 96.1,
+      "notes": "Interference-fit at neck with gasket."
+    },
+    {
+      "part_key": "insert_filter",
+      "part_name": "Center insert / filter collar",
+      "material": "Stainless Steel 304 + 80 mesh screen",
+      "process": "Stamp + draw + mesh spot weld",
+      "thickness_mm": 0.62,
+      "quantity": 1,
+      "mass_estimate_g": 22.1,
+      "notes": "Inner opening sized for pour stability."
+    },
+    {
+      "part_key": "handle",
+      "part_name": "External handle",
+      "material": "Glass-filled Nylon 66, heat-resistant",
+      "process": "Injection mold + fastener insert",
+      "thickness_mm": 12.09,
+      "quantity": 1,
+      "mass_estimate_g": 21.5,
+      "notes": "Thermal isolation target < 45C at grip."
+    },
+    {
+      "part_key": "gasket",
+      "part_name": "Sealing ring / gasket",
+      "material": "Food-grade Silicone (Shore A 50-60)",
+      "process": "Compression mold",
+      "thickness_mm": 2.59,
+      "quantity": 1,
+      "mass_estimate_g": 1.4,
+      "notes": "Food-contact compliant elastomer required."
+    },
+    {
+      "part_key": "base_cap",
+      "part_name": "Bottom cap / base ring",
+      "material": "Stainless Steel 304 (1.0 mm)",
+      "process": "Stamp + trim",
+      "thickness_mm": 1.0,
+      "quantity": 1,
+      "mass_estimate_g": 35.8,
+      "notes": "Protective and structural base reinforcement."
+    }
+  ],
+  "analysis_notes": [
+    "Images indicate a multi-part stainless vessel with a separate curved upper head.",
+    "Material suggestions are generated from reflectivity, color distribution, and repeated part visibility.",
+    "For stainless manufacturing, 304 is selected as baseline; 316L remains optional for higher corrosion resistance."
+  ]
+}

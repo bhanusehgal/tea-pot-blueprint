@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Curved Head Teapot Blueprint Tool</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/assets/styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="top-bar card">
+        <div class="top-bar__title-wrap">
+          <h1>Curved Head Teapot Blueprint</h1>
+          <p>Manufacturing-style editable blueprint with image-driven material suggestions.</p>
+        </div>
+        <div class="top-bar__controls">
+          <label>
+            Target Cups
+            <input id="cupsInput" type="number" min="1" max="12" step="0.25" value="4" />
+          </label>
+          <button id="loadDefaultBtn">Load 4-Cup Baseline</button>
+          <button id="analyzeBtn">Analyze Images</button>
+        </div>
+      </header>
+
+      <main class="layout-grid">
+        <section class="left-column">
+          <div class="card panel-block">
+            <div class="panel-title-row">
+              <h2>Source Images</h2>
+              <span id="imageCountBadge" class="badge">0 files</span>
+            </div>
+            <div id="imageStrip" class="image-strip"></div>
+          </div>
+
+          <div class="card panel-block">
+            <div class="panel-title-row">
+              <h2>Detected Parts</h2>
+              <button id="applyAnalysisBtn" class="ghost-btn">Apply Material Suggestions</button>
+            </div>
+            <div id="analysisSummary" class="analysis-summary"></div>
+            <div id="partsList" class="parts-list"></div>
+          </div>
+
+          <div class="card panel-block">
+            <h2>Dimensions (Editable)</h2>
+            <div id="dimensionsTable" class="dimensions-table"></div>
+          </div>
+
+          <div class="card panel-block">
+            <h2>Materials (Editable)</h2>
+            <div id="materialsTable" class="materials-table"></div>
+          </div>
+
+          <div class="card panel-block">
+            <h2>Bill of Materials</h2>
+            <div id="bomTable" class="bom-table"></div>
+          </div>
+        </section>
+
+        <section class="right-column">
+          <div class="card viewer-card">
+            <div class="panel-title-row">
+              <h2>3D Model Preview</h2>
+              <span class="hint">Drag: rotate, Scroll: zoom, Shift+Drag: pan</span>
+            </div>
+            <div id="threeCanvas" class="three-canvas"></div>
+          </div>
+
+          <div class="card structure-card">
+            <div class="panel-title-row">
+              <h2>Structure Playground</h2>
+              <span class="hint">Editable morph controls</span>
+            </div>
+            <p class="prototype-note">
+              Adjust the vessel form with high-level sliders, then regenerate the prototype board.
+            </p>
+            <div class="playground-grid">
+              <div class="play-row">
+                <label for="shapeBodyCurve">Body Curvature</label>
+                <input id="shapeBodyCurve" type="range" min="-100" max="100" value="0" />
+                <span id="shapeBodyCurveVal" class="play-value">0%</span>
+              </div>
+              <div class="play-row">
+                <label for="shapeHeadFlare">Head Flare</label>
+                <input id="shapeHeadFlare" type="range" min="-100" max="100" value="0" />
+                <span id="shapeHeadFlareVal" class="play-value">0%</span>
+              </div>
+              <div class="play-row">
+                <label for="shapeHeight">Vessel Height</label>
+                <input id="shapeHeight" type="range" min="-100" max="100" value="0" />
+                <span id="shapeHeightVal" class="play-value">0%</span>
+              </div>
+              <div class="play-row">
+                <label for="shapeNeck">Neck Tightness</label>
+                <input id="shapeNeck" type="range" min="-100" max="100" value="0" />
+                <span id="shapeNeckVal" class="play-value">0%</span>
+              </div>
+              <div class="play-row">
+                <label for="shapeHandle">Handle Reach</label>
+                <input id="shapeHandle" type="range" min="-100" max="100" value="0" />
+                <span id="shapeHandleVal" class="play-value">0%</span>
+              </div>
+              <div class="play-row">
+                <label for="shapeBase">Base Stability</label>
+                <input id="shapeBase" type="range" min="-100" max="100" value="0" />
+                <span id="shapeBaseVal" class="play-value">0%</span>
+              </div>
+            </div>
+            <div class="play-actions">
+              <label class="play-check">
+                <input id="shapeLockCapacity" type="checkbox" checked />
+                Keep target capacity while morphing
+              </label>
+              <button id="shapeResetBtn" class="ghost-btn">Reset Morph</button>
+              <button id="shapeSetBaseBtn" class="ghost-btn">Use Current as Baseline</button>
+              <button id="shapeApplyBtn">Apply + Regenerate Prototype</button>
+            </div>
+          </div>
+
+          <div class="card prototype-card">
+            <div class="panel-title-row">
+              <h2>Prototype v1 (From Images)</h2>
+              <button id="generatePrototypeBtn" class="ghost-btn">Generate Prototype</button>
+            </div>
+            <p class="prototype-note">
+              Auto-generated concept board combining your image references, inferred part stack, and current blueprint dimensions.
+            </p>
+            <img id="prototypeImage" class="prototype-image" alt="Prototype v1 preview" />
+            <div id="prototypeMeta" class="prototype-meta">Prototype not generated yet.</div>
+          </div>
+
+          <div class="card blueprint-card">
+            <div class="panel-title-row">
+              <h2>2D Blueprint View</h2>
+              <span id="capacityLabel" class="badge">Capacity: --</span>
+            </div>
+            <svg id="blueprintSvg" viewBox="0 0 1000 470" preserveAspectRatio="xMidYMid meet"></svg>
+          </div>
+
+          <div class="card export-card">
+            <h2>Exports</h2>
+            <p>Use `DXF` for AutoCAD workflows, `OBJ` for Blender, `PPTX` for shareable presentations.</p>
+            <div class="export-actions">
+              <button data-export="json">Export JSON</button>
+              <button data-export="dxf">Export DXF</button>
+              <button data-export="obj">Export OBJ</button>
+              <button data-export="pptx">Export PPTX</button>
+            </div>
+            <div id="statusBox" class="status-box">Ready.</div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script type="module" src="/assets/app.js"></script>
+  </body>
+</html>
