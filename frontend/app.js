@@ -5,6 +5,8 @@ const state = {
   blueprint: null,
   analysis: null,
   images: [],
+  localMode: false,
+  backendChecked: false,
   prototypeUrl: "",
   teapotGroup: null,
   recomputeTimer: null,
@@ -73,6 +75,18 @@ const capacityScaleKeys = [
   "gasket_cross_section_mm",
   "base_cap_height_mm",
   "base_cap_diameter_mm",
+];
+
+const localImageNames = [
+  "Screenshot 2026-02-09 224903.png",
+  "Screenshot 2026-02-09 224934.png",
+  "Screenshot 2026-02-09 224951.png",
+  "Screenshot 2026-02-09 225006.png",
+  "Screenshot 2026-02-09 225020.png",
+  "Screenshot 2026-02-09 225036.png",
+  "Screenshot 2026-02-09 225219.png",
+  "Screenshot 2026-02-09 225243.png",
+  "Screenshot 2026-02-09 225304.png",
 ];
 
 const els = {
@@ -193,7 +207,466 @@ function initPlaygroundFromBlueprint() {
   setPlaygroundDefaults();
 }
 
+const US_CUP_TO_ML = 236.588;
+
+function cupsToMl(cups) {
+  return cups * US_CUP_TO_ML;
+}
+
+function baseDimensions() {
+  return {
+    cups_target: 4.0,
+    capacity_target_ml: 946.0,
+    estimated_capacity_ml: 980.0,
+    wall_thickness_mm: 0.9,
+    manufacturing_tolerance_mm: 0.25,
+    body_height_mm: 125.0,
+    body_max_diameter_mm: 116.0,
+    body_bottom_diameter_mm: 90.0,
+    neck_diameter_mm: 84.0,
+    head_height_mm: 58.0,
+    head_top_diameter_mm: 150.0,
+    head_neck_overlap_mm: 10.0,
+    handle_length_mm: 92.0,
+    handle_drop_mm: 66.0,
+    handle_offset_mm: 20.0,
+    handle_thickness_mm: 14.0,
+    insert_outer_diameter_mm: 56.0,
+    insert_inner_diameter_mm: 36.0,
+    insert_height_mm: 26.0,
+    gasket_cross_section_mm: 3.0,
+    base_cap_height_mm: 6.0,
+    base_cap_diameter_mm: 88.0,
+    overall_height_mm: 173.0,
+  };
+}
+
+function frustumVolumeMm3(r1, r2, h) {
+  return Math.PI * h * (r1 * r1 + r1 * r2 + r2 * r2) / 3.0;
+}
+
+function estimateCapacityMl(dim) {
+  const t = Number(dim.wall_thickness_mm);
+  const bodyH = Number(dim.body_height_mm);
+  const rBottom = Math.max((Number(dim.body_bottom_diameter_mm) * 0.5) - t, 1.0);
+  const rMax = Math.max((Number(dim.body_max_diameter_mm) * 0.5) - t, 1.0);
+  const rNeck = Math.max((Number(dim.neck_diameter_mm) * 0.5) - t, 1.0);
+  const rHead = Math.max((Number(dim.head_top_diameter_mm) * 0.5) - t, 1.0);
+
+  const bodySegments = [
+    [rBottom, rMax, bodyH * 0.30],
+    [rMax, rMax * 0.98, bodyH * 0.38],
+    [rMax * 0.98, rNeck, bodyH * 0.32],
+  ];
+
+  const headH = Math.max(Number(dim.head_height_mm) - Number(dim.head_neck_overlap_mm), 8.0);
+  const headSegments = [
+    [rNeck, rNeck * 1.18, headH * 0.45],
+    [rNeck * 1.18, rHead, headH * 0.55],
+  ];
+
+  let totalMm3 = 0;
+  [...bodySegments, ...headSegments].forEach(([a, b, h]) => {
+    totalMm3 += frustumVolumeMm3(a, b, h);
+  });
+
+  const insertR = Math.max((Number(dim.insert_outer_diameter_mm) * 0.5) - t, 1.0);
+  const insertH = Math.max(Number(dim.insert_height_mm), 1.0);
+  const intrusion = Math.PI * insertR * insertR * insertH;
+
+  return Math.max((totalMm3 - intrusion) / 1000.0, 100.0);
+}
+
+function scaleDimensions(dim, scale) {
+  const scaled = JSON.parse(JSON.stringify(dim));
+  const keys = [
+    "wall_thickness_mm",
+    "body_height_mm",
+    "body_max_diameter_mm",
+    "body_bottom_diameter_mm",
+    "neck_diameter_mm",
+    "head_height_mm",
+    "head_top_diameter_mm",
+    "head_neck_overlap_mm",
+    "handle_length_mm",
+    "handle_drop_mm",
+    "handle_offset_mm",
+    "handle_thickness_mm",
+    "insert_outer_diameter_mm",
+    "insert_inner_diameter_mm",
+    "insert_height_mm",
+    "gasket_cross_section_mm",
+    "base_cap_height_mm",
+    "base_cap_diameter_mm",
+    "manufacturing_tolerance_mm",
+  ];
+
+  keys.forEach((k) => {
+    scaled[k] = Number((Number(scaled[k]) * scale).toFixed(2));
+  });
+  scaled.overall_height_mm = Number((scaled.body_height_mm + scaled.head_height_mm - scaled.head_neck_overlap_mm).toFixed(2));
+  return scaled;
+}
+
+function createDefaultDimensions(cups = 4.0) {
+  const base = baseDimensions();
+  const targetMl = cupsToMl(cups);
+  const baseEstimated = estimateCapacityMl(base);
+  const scale = Math.pow(targetMl / baseEstimated, 1.0 / 3.0);
+  const scaled = scaleDimensions(base, scale);
+  scaled.cups_target = Number(cups.toFixed(2));
+  scaled.capacity_target_ml = Number(targetMl.toFixed(1));
+  scaled.estimated_capacity_ml = Number(estimateCapacityMl(scaled).toFixed(1));
+  return scaled;
+}
+
+function defaultMaterials() {
+  return [
+    {
+      part_key: "body_shell",
+      part_name: "Lower vessel body shell",
+      recommended: "Stainless Steel 304 (0.9 mm)",
+      alternatives: ["Stainless Steel 316L (0.9 mm)", "Stainless Steel 430 (1.0 mm)"],
+      selected: "Stainless Steel 304 (0.9 mm)",
+      confidence: 0.86,
+      notes: "Deep draw + spin formed shell.",
+    },
+    {
+      part_key: "curved_head",
+      part_name: "Curved upper head / funnel section",
+      recommended: "Stainless Steel 304 (0.9 mm)",
+      alternatives: ["Stainless Steel 316L (0.9 mm)", "Stainless Steel 430 (1.0 mm)"],
+      selected: "Stainless Steel 304 (0.9 mm)",
+      confidence: 0.82,
+      notes: "Curved lip and neck transition.",
+    },
+    {
+      part_key: "handle",
+      part_name: "External handle",
+      recommended: "Glass-filled Nylon 66, heat-resistant",
+      alternatives: ["Bakelite / Phenolic resin", "Stainless handle + silicone sleeve"],
+      selected: "Glass-filled Nylon 66, heat-resistant",
+      confidence: 0.61,
+      notes: "Thermal isolation and grip safety.",
+    },
+    {
+      part_key: "insert_filter",
+      part_name: "Center insert / filter collar",
+      recommended: "Stainless Steel 304 + 80 mesh screen",
+      alternatives: ["Stainless Steel 316L + 100 mesh screen", "Perforated stainless disc"],
+      selected: "Stainless Steel 304 + 80 mesh screen",
+      confidence: 0.79,
+      notes: "Leaf control during pour.",
+    },
+    {
+      part_key: "gasket",
+      part_name: "Sealing ring / gasket",
+      recommended: "Food-grade Silicone (Shore A 50-60)",
+      alternatives: ["EPDM food-grade", "Fluorosilicone (premium)"],
+      selected: "Food-grade Silicone (Shore A 50-60)",
+      confidence: 0.66,
+      notes: "Upper/lower section seal.",
+    },
+    {
+      part_key: "base_cap",
+      part_name: "Bottom cap / base ring",
+      recommended: "Stainless Steel 304 (1.0 mm)",
+      alternatives: ["Stainless Steel 430 (1.0 mm)", "Stainless Steel 316L (1.0 mm)"],
+      selected: "Stainless Steel 304 (1.0 mm)",
+      confidence: 0.75,
+      notes: "Base reinforcement.",
+    },
+  ];
+}
+
+function materialByKey(materials) {
+  const out = {};
+  materials.forEach((m) => {
+    out[m.part_key] = (m.selected || m.recommended || "").trim();
+  });
+  return out;
+}
+
+function materialDensity(name) {
+  const text = String(name || "").toLowerCase();
+  if (text.includes("stainless") || text.includes("304") || text.includes("316") || text.includes("430")) {
+    return 7.9;
+  }
+  if (text.includes("nylon")) {
+    return 1.35;
+  }
+  if (text.includes("bakelite") || text.includes("phenolic")) {
+    return 1.3;
+  }
+  if (text.includes("silicone")) {
+    return 1.15;
+  }
+  if (text.includes("epdm")) {
+    return 0.95;
+  }
+  return 1.1;
+}
+
+function frustumSurfaceArea(r1, r2, h) {
+  const slant = Math.sqrt((r1 - r2) ** 2 + h * h);
+  return Math.PI * (r1 + r2) * slant;
+}
+
+function massFromShell(areaMm2, thicknessMm, materialName) {
+  const density = materialDensity(materialName);
+  const volMm3 = areaMm2 * thicknessMm;
+  return (volMm3 / 1000.0) * density;
+}
+
+function massFromVolume(volumeMm3, materialName) {
+  const density = materialDensity(materialName);
+  return (volumeMm3 / 1000.0) * density;
+}
+
+function generateBom(dim, materials) {
+  const mats = materialByKey(materials);
+  const t = Number(dim.wall_thickness_mm);
+  const rBottom = Number(dim.body_bottom_diameter_mm) * 0.5;
+  const rMax = Number(dim.body_max_diameter_mm) * 0.5;
+  const rNeck = Number(dim.neck_diameter_mm) * 0.5;
+
+  const bodyArea = (
+    frustumSurfaceArea(rBottom, rMax, Number(dim.body_height_mm) * 0.30)
+    + frustumSurfaceArea(rMax, rMax * 0.98, Number(dim.body_height_mm) * 0.38)
+    + frustumSurfaceArea(rMax * 0.98, rNeck, Number(dim.body_height_mm) * 0.32)
+  );
+
+  const headH = Math.max(Number(dim.head_height_mm) - Number(dim.head_neck_overlap_mm), 8.0);
+  const rHead = Number(dim.head_top_diameter_mm) * 0.5;
+  const headArea = (
+    frustumSurfaceArea(rNeck, rNeck * 1.18, headH * 0.45)
+    + frustumSurfaceArea(rNeck * 1.18, rHead, headH * 0.55)
+  );
+
+  const insertRingArea = Math.PI * ((Number(dim.insert_outer_diameter_mm) ** 2) - (Number(dim.insert_inner_diameter_mm) ** 2)) / 4.0;
+  const insertWallArea = Math.PI * Number(dim.insert_outer_diameter_mm) * Number(dim.insert_height_mm);
+  const insertArea = insertRingArea + insertWallArea;
+
+  const baseDiscArea = Math.PI * (Number(dim.base_cap_diameter_mm) ** 2) / 4.0;
+  const handleLen = Number(dim.handle_length_mm) * 1.25;
+  const handleArea = Math.PI * Number(dim.handle_thickness_mm) * handleLen;
+
+  const gasketMajor = Number(dim.neck_diameter_mm) * 0.5;
+  const gasketMinor = Math.max(Number(dim.gasket_cross_section_mm) * 0.5, 0.5);
+  const gasketVol = 2.0 * Math.PI * Math.PI * gasketMajor * (gasketMinor ** 2);
+
+  const bodyMat = mats.body_shell || "Stainless Steel 304 (0.9 mm)";
+  const headMat = mats.curved_head || "Stainless Steel 304 (0.9 mm)";
+  const handleMat = mats.handle || "Glass-filled Nylon 66";
+  const insertMat = mats.insert_filter || "Stainless Steel 304 + 80 mesh screen";
+  const gasketMat = mats.gasket || "Food-grade Silicone";
+  const baseMat = mats.base_cap || "Stainless Steel 304 (1.0 mm)";
+
+  return [
+    {
+      part_key: "body_shell",
+      part_name: "Lower vessel body shell",
+      material: bodyMat,
+      process: "Deep draw + neck reduction + brushing",
+      thickness_mm: Number(t.toFixed(2)),
+      quantity: 1,
+      mass_estimate_g: Number(massFromShell(bodyArea, t, bodyMat).toFixed(1)),
+      notes: "TIG seam only if split blank is used.",
+    },
+    {
+      part_key: "curved_head",
+      part_name: "Curved upper head / funnel section",
+      material: headMat,
+      process: "Spin forming + lip trim",
+      thickness_mm: Number(t.toFixed(2)),
+      quantity: 1,
+      mass_estimate_g: Number(massFromShell(headArea, t, headMat).toFixed(1)),
+      notes: "Interference-fit at neck with gasket.",
+    },
+    {
+      part_key: "insert_filter",
+      part_name: "Center insert / filter collar",
+      material: insertMat,
+      process: "Stamp + draw + mesh spot weld",
+      thickness_mm: Number(Math.max(t * 0.8, 0.6).toFixed(2)),
+      quantity: 1,
+      mass_estimate_g: Number(massFromShell(insertArea, Math.max(t * 0.8, 0.6), insertMat).toFixed(1)),
+      notes: "Inner opening sized for pour stability.",
+    },
+    {
+      part_key: "handle",
+      part_name: "External handle",
+      material: handleMat,
+      process: "Injection mold + fastener insert",
+      thickness_mm: Number(Number(dim.handle_thickness_mm).toFixed(2)),
+      quantity: 1,
+      mass_estimate_g: Number(massFromShell(handleArea, Number(dim.handle_thickness_mm) * 0.35, handleMat).toFixed(1)),
+      notes: "Thermal isolation target < 45C at grip.",
+    },
+    {
+      part_key: "gasket",
+      part_name: "Sealing ring / gasket",
+      material: gasketMat,
+      process: "Compression mold",
+      thickness_mm: Number(Number(dim.gasket_cross_section_mm).toFixed(2)),
+      quantity: 1,
+      mass_estimate_g: Number(massFromVolume(gasketVol, gasketMat).toFixed(1)),
+      notes: "Food-contact compliant elastomer required.",
+    },
+    {
+      part_key: "base_cap",
+      part_name: "Bottom cap / base ring",
+      material: baseMat,
+      process: "Stamp + trim",
+      thickness_mm: Number(Math.max(t, 1.0).toFixed(2)),
+      quantity: 1,
+      mass_estimate_g: Number(massFromShell(baseDiscArea, Math.max(t, 1.0), baseMat).toFixed(1)),
+      notes: "Protective and structural base reinforcement.",
+    },
+  ];
+}
+
+function mergeMaterialsLocal(materials) {
+  const defaults = defaultMaterials();
+  if (!materials || !Array.isArray(materials) || materials.length === 0) {
+    return defaults;
+  }
+
+  const defaultMap = {};
+  defaults.forEach((m) => {
+    defaultMap[m.part_key] = m;
+  });
+
+  const merged = [];
+  const seen = new Set();
+  materials.forEach((m) => {
+    seen.add(m.part_key);
+    const base = defaultMap[m.part_key];
+    if (!base) {
+      merged.push(m);
+      return;
+    }
+    merged.push({
+      ...base,
+      recommended: m.recommended || base.recommended,
+      alternatives: m.alternatives?.length ? m.alternatives : base.alternatives,
+      selected: m.selected || m.recommended || base.selected,
+      confidence: Number.isFinite(m.confidence) ? m.confidence : base.confidence,
+      notes: m.notes || base.notes,
+    });
+  });
+
+  defaults.forEach((m) => {
+    if (!seen.has(m.part_key)) {
+      merged.push(m);
+    }
+  });
+  return merged;
+}
+
+function defaultAnalysis() {
+  const materials = defaultMaterials();
+  const parts = materials.map((m) => ({
+    part_key: m.part_key,
+    part_name: m.part_name,
+    confidence: m.confidence,
+    evidence: "Detected from repeated geometry and finish cues in the provided image set.",
+  }));
+
+  return {
+    metrics: {
+      image_count: localImageNames.length,
+      metallic_ratio: 0.44,
+      dark_ratio: 0.19,
+      green_ratio: 0.04,
+      specular_ratio: 0.27,
+    },
+    detected_parts: parts,
+    material_suggestions: materials,
+    notes: [
+      "Images indicate a multi-part stainless vessel with a separate curved upper head.",
+      "Material suggestions are generated from reflectivity, color distribution, and repeated part visibility.",
+      "For stainless manufacturing, 304 is selected as baseline; 316L remains optional for higher corrosion resistance.",
+    ],
+  };
+}
+
+function buildDefaultBlueprintLocal(cups = 4.0) {
+  const analysis = defaultAnalysis();
+  const dimensions = createDefaultDimensions(cups);
+  const materials = mergeMaterialsLocal(analysis.material_suggestions);
+  const bom = generateBom(dimensions, materials);
+  return {
+    title: "Curved-Head Teapot Blueprint",
+    design_version: "v1",
+    units: "mm",
+    dimensions,
+    materials,
+    bom,
+    analysis_notes: analysis.notes,
+  };
+}
+
+function recomputeBlueprintLocal(blueprint) {
+  const next = JSON.parse(JSON.stringify(blueprint));
+  next.dimensions.overall_height_mm = Number((
+    Number(next.dimensions.body_height_mm)
+    + Number(next.dimensions.head_height_mm)
+    - Number(next.dimensions.head_neck_overlap_mm)
+  ).toFixed(2));
+  next.dimensions.estimated_capacity_ml = Number(estimateCapacityMl(next.dimensions).toFixed(1));
+  next.materials = mergeMaterialsLocal(next.materials);
+  next.bom = generateBom(next.dimensions, next.materials);
+  return next;
+}
+
+function localImagesPayload() {
+  return {
+    files: localImageNames.map((name) => ({
+      name,
+      url: `/${encodeURIComponent(name)}`,
+      size_bytes: "0",
+    })),
+  };
+}
+
+async function maybeEnableLocalMode() {
+  if (state.backendChecked) {
+    return;
+  }
+  state.backendChecked = true;
+  try {
+    const response = await fetch("/api/health", { method: "GET" });
+    if (!response.ok) {
+      throw new Error("backend unavailable");
+    }
+    state.localMode = false;
+    setStatus("Connected to backend service.", "ok");
+  } catch {
+    state.localMode = true;
+    setStatus("Running in free static mode (no paid backend).", "warn");
+  }
+}
+
 async function apiGet(path) {
+  if (state.localMode) {
+    if (path.startsWith("/api/images")) {
+      return localImagesPayload();
+    }
+    if (path.startsWith("/api/blueprint/default")) {
+      const url = new URL(path, window.location.origin);
+      const cups = Number.parseFloat(url.searchParams.get("cups") || "4") || 4;
+      return {
+        blueprint: buildDefaultBlueprintLocal(cups),
+        analysis: defaultAnalysis(),
+      };
+    }
+    if (path.startsWith("/api/health")) {
+      return { status: "ok-local" };
+    }
+    throw new Error(`Local mode route not implemented for GET ${path}`);
+  }
+
   const response = await fetch(path);
   if (!response.ok) {
     throw new Error(`GET ${path} failed: ${response.status}`);
@@ -202,6 +675,22 @@ async function apiGet(path) {
 }
 
 async function apiPost(path, body = null) {
+  if (state.localMode) {
+    if (path.startsWith("/api/analyze")) {
+      return {
+        ok: true,
+        json: async () => defaultAnalysis(),
+      };
+    }
+    if (path.startsWith("/api/blueprint/recompute")) {
+      return {
+        ok: true,
+        json: async () => ({ blueprint: recomputeBlueprintLocal(body) }),
+      };
+    }
+    throw new Error(`Local mode route not implemented for POST ${path}`);
+  }
+
   const response = await fetch(path, {
     method: "POST",
     headers: body ? { "Content-Type": "application/json" } : undefined,
@@ -1123,11 +1612,248 @@ function resetPlaygroundMorph() {
   queueRecompute(true);
 }
 
+function downloadBlob(blob, fileName) {
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(objectUrl);
+}
+
+function buildDxfLocal(blueprint) {
+  const d = blueprint.dimensions;
+  const lines = [];
+  const push = (...parts) => lines.push(...parts);
+  const addLine = (x1, y1, x2, y2, layer = "SIDE") => {
+    push(
+      "0", "LINE", "8", layer,
+      "10", x1.toFixed(4), "20", y1.toFixed(4), "30", "0.0",
+      "11", x2.toFixed(4), "21", y2.toFixed(4), "31", "0.0",
+    );
+  };
+  const addCircle = (cx, cy, r, layer = "TOP") => {
+    push(
+      "0", "CIRCLE", "8", layer,
+      "10", cx.toFixed(4), "20", cy.toFixed(4), "30", "0.0",
+      "40", r.toFixed(4),
+    );
+  };
+
+  const bodyH = d.body_height_mm;
+  const overallH = d.overall_height_mm;
+  const rBottom = d.body_bottom_diameter_mm * 0.5;
+  const rMax = d.body_max_diameter_mm * 0.5;
+  const rNeck = d.neck_diameter_mm * 0.5;
+  const rHead = d.head_top_diameter_mm * 0.5;
+  const p = [
+    [rBottom, 0.0],
+    [rMax, bodyH * 0.30],
+    [rMax * 0.98, bodyH * 0.68],
+    [rNeck, bodyH],
+    [rNeck * 1.18, bodyH + (overallH - bodyH) * 0.45],
+    [rHead, overallH],
+  ];
+  for (let i = 0; i < p.length - 1; i += 1) {
+    addLine(p[i][0], p[i][1], p[i + 1][0], p[i + 1][1], "SIDE");
+    addLine(-p[i][0], p[i][1], -p[i + 1][0], p[i + 1][1], "SIDE");
+  }
+  addLine(0, -8, 0, overallH + 12, "CENTER");
+  addLine(-rBottom, 0, rBottom, 0, "SIDE");
+  addLine(-rHead, overallH, rHead, overallH, "SIDE");
+
+  const cx = 280;
+  const cy = overallH * 0.6;
+  addCircle(cx, cy, rHead, "TOP");
+  addCircle(cx, cy, rNeck, "TOP");
+  addCircle(cx, cy, d.insert_outer_diameter_mm * 0.5, "TOP");
+  addCircle(cx, cy, d.insert_inner_diameter_mm * 0.5, "TOP");
+
+  const out = [
+    "0", "SECTION", "2", "HEADER", "0", "ENDSEC",
+    "0", "SECTION", "2", "TABLES", "0", "ENDSEC",
+    "0", "SECTION", "2", "ENTITIES",
+    ...lines,
+    "0", "ENDSEC", "0", "EOF",
+  ];
+  return `${out.join("\n")}\n`;
+}
+
+function buildObjLocal(blueprint) {
+  const d = blueprint.dimensions;
+  const bodyH = d.body_height_mm;
+  const overallH = d.overall_height_mm;
+  const rBottom = d.body_bottom_diameter_mm * 0.5;
+  const rMax = d.body_max_diameter_mm * 0.5;
+  const rNeck = d.neck_diameter_mm * 0.5;
+  const rHead = d.head_top_diameter_mm * 0.5;
+  const profile = [
+    [rBottom, 0.0],
+    [rMax, bodyH * 0.30],
+    [rMax * 0.98, bodyH * 0.68],
+    [rNeck, bodyH],
+    [rNeck * 1.18, bodyH + (overallH - bodyH) * 0.45],
+    [rHead, overallH],
+  ];
+  const seg = 56;
+  const verts = [];
+  const faces = [];
+  const rings = [];
+  profile.forEach(([r, y]) => {
+    const ring = [];
+    for (let i = 0; i < seg; i += 1) {
+      const t = (2 * Math.PI * i) / seg;
+      const x = r * Math.cos(t);
+      const z = r * Math.sin(t);
+      verts.push([x, y, z]);
+      ring.push(verts.length);
+    }
+    rings.push(ring);
+  });
+  for (let j = 0; j < rings.length - 1; j += 1) {
+    const a = rings[j];
+    const b = rings[j + 1];
+    for (let i = 0; i < seg; i += 1) {
+      const i2 = (i + 1) % seg;
+      faces.push([a[i], b[i], b[i2]]);
+      faces.push([a[i], b[i2], a[i2]]);
+    }
+  }
+  const lines = ["# teapot local export", "o teapot"];
+  verts.forEach(([x, y, z]) => lines.push(`v ${x.toFixed(6)} ${y.toFixed(6)} ${z.toFixed(6)}`));
+  faces.forEach(([a, b, c]) => lines.push(`f ${a} ${b} ${c}`));
+  return `${lines.join("\n")}\n`;
+}
+
+async function generatePrototypeLocalImage() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 1500;
+  canvas.height = 900;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#eef3f5";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#174f63";
+  ctx.fillRect(0, 0, canvas.width, 120);
+  ctx.fillStyle = "#edf5f7";
+  ctx.font = "28px Space Grotesk, sans-serif";
+  ctx.fillText("Curved-Head Teapot Prototype (Free Static Mode)", 24, 44);
+  ctx.font = "16px Space Grotesk, sans-serif";
+  ctx.fillText("Editable structure generated without paid backend hosting", 24, 74);
+
+  ctx.fillStyle = "#ffffff";
+  ctx.strokeStyle = "#b8cad2";
+  ctx.lineWidth = 2;
+  const left = { x: 20, y: 140, w: 440, h: 740 };
+  ctx.fillRect(left.x, left.y, left.w, left.h);
+  ctx.strokeRect(left.x, left.y, left.w, left.h);
+  ctx.fillStyle = "#2e5c6c";
+  ctx.font = "18px Space Grotesk, sans-serif";
+  ctx.fillText("Reference Images", 36, 172);
+
+  const thumbnails = state.images.slice(0, 6);
+  let idx = 0;
+  for (let r = 0; r < 3; r += 1) {
+    for (let c = 0; c < 2; c += 1) {
+      if (idx >= thumbnails.length) break;
+      const imgMeta = thumbnails[idx];
+      const img = new Image();
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise((resolve) => {
+        img.onload = resolve;
+        img.onerror = resolve;
+        img.src = imgMeta.url;
+      });
+      const x = 36 + c * 206;
+      const y = 190 + r * 165;
+      if (img.width > 0 && img.height > 0) {
+        ctx.drawImage(img, x, y, 190, 146);
+      }
+      ctx.strokeStyle = "#b8cad2";
+      ctx.strokeRect(x, y, 190, 146);
+      idx += 1;
+    }
+  }
+
+  const right = { x: 480, y: 140, w: 1000, h: 740 };
+  ctx.fillStyle = "#ffffff";
+  ctx.strokeStyle = "#b8cad2";
+  ctx.fillRect(right.x, right.y, right.w, right.h);
+  ctx.strokeRect(right.x, right.y, right.w, right.h);
+
+  const dim = state.blueprint.dimensions;
+  const ox = 840;
+  const oy = 730;
+  const scale = Math.min(2.0, 320 / Math.max(dim.head_top_diameter_mm, dim.body_max_diameter_mm));
+  const bodyH = dim.body_height_mm;
+  const overallH = dim.overall_height_mm;
+  const rBottom = dim.body_bottom_diameter_mm * 0.5;
+  const rMax = dim.body_max_diameter_mm * 0.5;
+  const rNeck = dim.neck_diameter_mm * 0.5;
+  const rHead = dim.head_top_diameter_mm * 0.5;
+  const prof = [
+    [rBottom, 0],
+    [rMax, bodyH * 0.3],
+    [rMax * 0.98, bodyH * 0.68],
+    [rNeck, bodyH],
+    [rNeck * 1.18, bodyH + (overallH - bodyH) * 0.45],
+    [rHead, overallH],
+  ];
+  const map = (x, y) => [ox + x * scale, oy - y * scale];
+  ctx.beginPath();
+  prof.forEach((p, i) => {
+    const [x, y] = map(p[0], p[1]);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  [...prof].reverse().forEach((p) => {
+    const [x, y] = map(-p[0], p[1]);
+    ctx.lineTo(x, y);
+  });
+  ctx.closePath();
+  ctx.fillStyle = "rgba(25,95,118,0.08)";
+  ctx.strokeStyle = "#145b70";
+  ctx.lineWidth = 3;
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = "#2e5c6c";
+  ctx.font = "18px Space Grotesk, sans-serif";
+  ctx.fillText("Prototype Geometry", 520, 180);
+  ctx.font = "16px Space Grotesk, sans-serif";
+  ctx.fillText(`Head Dia ${dim.head_top_diameter_mm.toFixed(1)} mm`, 760, 280);
+  ctx.fillText(`Body Dia ${dim.body_max_diameter_mm.toFixed(1)} mm`, 760, 760);
+  ctx.fillText(`Height ${dim.overall_height_mm.toFixed(1)} mm`, 640, 520);
+  ctx.fillText(`Estimated ${dim.estimated_capacity_ml.toFixed(1)} ml`, 520, 220);
+
+  return await new Promise((resolve) => {
+    canvas.toBlob((blob) => resolve(blob), "image/png");
+  });
+}
+
 async function generatePrototype() {
   setStatus("Generating prototype v1 board...", "");
   if (!state.blueprint) {
     setStatus("Load a blueprint first.", "warn");
     return;
+  }
+
+  if (state.localMode) {
+    try {
+      const blob = await generatePrototypeLocalImage();
+      if (state.prototypeUrl) {
+        URL.revokeObjectURL(state.prototypeUrl);
+      }
+      state.prototypeUrl = URL.createObjectURL(blob);
+      els.prototypeImage.src = state.prototypeUrl;
+      els.prototypeMeta.textContent = "Prototype generated in-browser (free static mode).";
+      setStatus("Prototype v1 generated (local mode).", "ok");
+      return;
+    } catch (error) {
+      setStatus(`Prototype error: ${error.message}`, "warn");
+      return;
+    }
   }
 
   try {
@@ -1164,6 +1890,37 @@ async function exportBlueprint(format) {
   }
 
   setStatus(`Generating ${format.toUpperCase()} export...`, "");
+
+  if (state.localMode) {
+    try {
+      const timestamp = new Date().toISOString().replace(/[-:TZ.]/g, "").slice(0, 14);
+      if (format === "json") {
+        const jsonText = JSON.stringify(state.blueprint, null, 2);
+        downloadBlob(new Blob([jsonText], { type: "application/json" }), `teapot_blueprint_${timestamp}.json`);
+        setStatus("Exported JSON (local mode).", "ok");
+        return;
+      }
+      if (format === "dxf") {
+        const dxfText = buildDxfLocal(state.blueprint);
+        downloadBlob(new Blob([dxfText], { type: "application/dxf" }), `teapot_blueprint_${timestamp}.dxf`);
+        setStatus("Exported DXF (local mode).", "ok");
+        return;
+      }
+      if (format === "obj") {
+        const objText = buildObjLocal(state.blueprint);
+        downloadBlob(new Blob([objText], { type: "text/plain" }), `teapot_blueprint_${timestamp}.obj`);
+        setStatus("Exported OBJ (local mode).", "ok");
+        return;
+      }
+      if (format === "pptx") {
+        setStatus("PPTX export requires backend hosting. Use JSON/DXF/OBJ in free static mode.", "warn");
+        return;
+      }
+    } catch (error) {
+      setStatus(`Export error: ${error.message}`, "warn");
+      return;
+    }
+  }
 
   try {
     const response = await fetch(`/api/export/${format}`, {
@@ -1263,6 +2020,7 @@ async function bootstrap() {
   bindEvents();
 
   try {
+    await maybeEnableLocalMode();
     await loadImages();
     await loadDefaultBlueprint();
   } catch (error) {

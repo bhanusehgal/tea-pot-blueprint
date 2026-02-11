@@ -68,3 +68,15 @@ python scripts/set_backend_url.py https://teapot-backend.onrender.com
 
 4. Commit and push.
 5. Deploy frontend on Netlify with publish directory `.` and no build command.
+
+## Free Hosting Mode (No Paid Backend)
+
+This project now supports a free static deployment mode:
+
+- Host only on Netlify (or GitHub Pages).
+- If `/api/health` is unavailable, the app automatically switches to **local static mode**.
+- In local static mode:
+  - image loading, editable dimensions, structure playground, BOM, and 3D/2D views work.
+  - prototype generation works in-browser.
+  - exports supported: `JSON`, `DXF`, `OBJ`.
+  - `PPTX` export requires backend hosting.

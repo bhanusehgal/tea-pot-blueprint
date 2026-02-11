@@ -10,9 +10,3 @@ status = 200
 from = "/assets/*"
 to = "/frontend/:splat"
 status = 200
-
-[[redirects]]
-from = "/api/*"
-to = "https://teapot-backend.onrender.com/api/:splat"
-status = 200
-force = true
