@@ -1,5 +1,5 @@
-import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js";
-import { OrbitControls } from "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/controls/OrbitControls.js";
+import * as THREE from "/assets/vendor/three/three.module.js";
+import { OrbitControls } from "/assets/vendor/three/OrbitControls.js";
 
 const state = {
   blueprint: null,
