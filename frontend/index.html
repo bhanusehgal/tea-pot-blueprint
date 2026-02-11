@@ -79,6 +79,38 @@
                   Auto rotate
                 </label>
               </div>
+              <div class="three-materials">
+                <div class="three-materials__title">Material & Color</div>
+                <div class="three-materials__grid">
+                  <label>
+                    Preset
+                    <select id="threeMaterialPreset">
+                      <option value="stainless-brushed">Stainless 304 Brushed</option>
+                      <option value="stainless-polished">Stainless Polished</option>
+                      <option value="stainless-dark">Stainless Satin Dark</option>
+                      <option value="copper">Copper</option>
+                      <option value="ceramic-white">Ceramic White</option>
+                      <option value="matte-black">Matte Black</option>
+                      <option value="anodized-blue">Anodized Blue</option>
+                      <option value="custom">Custom (use controls)</option>
+                    </select>
+                  </label>
+                  <label>
+                    Primary Color
+                    <input id="threePrimaryColor" type="color" value="#c9d0d4" />
+                  </label>
+                  <label>
+                    Metalness
+                    <input id="threeMetalness" type="range" min="0" max="100" value="86" />
+                    <span id="threeMetalnessVal" class="play-value">86%</span>
+                  </label>
+                  <label>
+                    Roughness
+                    <input id="threeRoughness" type="range" min="0" max="100" value="22" />
+                    <span id="threeRoughnessVal" class="play-value">22%</span>
+                  </label>
+                </div>
+              </div>
               <div class="three-tools__buttons">
                 <button class="ghost-btn" data-quick-shape="wider">Wider Body</button>
                 <button class="ghost-btn" data-quick-shape="taller">Taller Vessel</button>

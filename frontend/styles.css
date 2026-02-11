@@ -337,6 +337,45 @@ button:active {
   font-size: 0.8rem;
 }
 
+.three-materials {
+  border: 1px dashed rgba(15, 116, 140, 0.28);
+  border-radius: 10px;
+  padding: 8px;
+  margin-bottom: 8px;
+  background: rgba(241, 248, 251, 0.72);
+}
+
+.three-materials__title {
+  color: #194d5d;
+  font-size: 0.81rem;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.three-materials__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+}
+
+.three-materials__grid label {
+  gap: 5px;
+  font-size: 0.78rem;
+}
+
+.three-materials__grid input[type="color"] {
+  width: 100%;
+  min-width: 0;
+  padding: 2px;
+  height: 35px;
+}
+
+.three-materials__grid input[type="range"] {
+  width: 100%;
+  min-width: 0;
+  accent-color: #0f748c;
+}
+
 .three-tools__buttons {
   display: flex;
   flex-wrap: wrap;

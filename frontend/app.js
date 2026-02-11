@@ -28,6 +28,12 @@ const state = {
     camera: null,
     renderer: null,
     controls: null,
+    materialState: {
+      preset: "stainless-brushed",
+      primaryColor: "#c9d0d4",
+      metalness: 0.86,
+      roughness: 0.22,
+    },
   },
 };
 
@@ -89,6 +95,93 @@ const localImageNames = [
   "Screenshot 2026-02-09 225304.png",
 ];
 
+const THREE_MATERIAL_PRESETS = {
+  "stainless-brushed": {
+    primaryColor: "#c9d0d4",
+    accentColor: "#9ca9af",
+    handleColor: "#14181c",
+    gasketColor: "#214b3f",
+    metalness: 0.86,
+    roughness: 0.22,
+    accentMetalness: 0.78,
+    accentRoughness: 0.35,
+    handleMetalness: 0.12,
+    handleRoughness: 0.86,
+  },
+  "stainless-polished": {
+    primaryColor: "#d8dee1",
+    accentColor: "#b9c5ca",
+    handleColor: "#1f2328",
+    gasketColor: "#1f4d40",
+    metalness: 0.95,
+    roughness: 0.12,
+    accentMetalness: 0.88,
+    accentRoughness: 0.2,
+    handleMetalness: 0.16,
+    handleRoughness: 0.72,
+  },
+  "stainless-dark": {
+    primaryColor: "#7f8f97",
+    accentColor: "#697980",
+    handleColor: "#111418",
+    gasketColor: "#1a4338",
+    metalness: 0.8,
+    roughness: 0.42,
+    accentMetalness: 0.75,
+    accentRoughness: 0.5,
+    handleMetalness: 0.08,
+    handleRoughness: 0.9,
+  },
+  copper: {
+    primaryColor: "#bc7846",
+    accentColor: "#9c5e34",
+    handleColor: "#20242a",
+    gasketColor: "#4d3528",
+    metalness: 0.92,
+    roughness: 0.24,
+    accentMetalness: 0.85,
+    accentRoughness: 0.3,
+    handleMetalness: 0.18,
+    handleRoughness: 0.76,
+  },
+  "ceramic-white": {
+    primaryColor: "#f1f4f6",
+    accentColor: "#dfe5e8",
+    handleColor: "#30353b",
+    gasketColor: "#8f9ca5",
+    metalness: 0.08,
+    roughness: 0.56,
+    accentMetalness: 0.08,
+    accentRoughness: 0.64,
+    handleMetalness: 0.1,
+    handleRoughness: 0.82,
+  },
+  "matte-black": {
+    primaryColor: "#242a2f",
+    accentColor: "#1a1f24",
+    handleColor: "#171b20",
+    gasketColor: "#2b343a",
+    metalness: 0.14,
+    roughness: 0.86,
+    accentMetalness: 0.12,
+    accentRoughness: 0.9,
+    handleMetalness: 0.08,
+    handleRoughness: 0.92,
+  },
+  "anodized-blue": {
+    primaryColor: "#3e6f8f",
+    accentColor: "#2f566e",
+    handleColor: "#16232e",
+    gasketColor: "#2c3f4a",
+    metalness: 0.65,
+    roughness: 0.32,
+    accentMetalness: 0.6,
+    accentRoughness: 0.4,
+    handleMetalness: 0.12,
+    handleRoughness: 0.84,
+  },
+};
+
 const els = {
   cupsInput: document.getElementById("cupsInput"),
   loadDefaultBtn: document.getElementById("loadDefaultBtn"),
@@ -109,6 +202,12 @@ const els = {
   prototypeImage: document.getElementById("prototypeImage"),
   prototypeMeta: document.getElementById("prototypeMeta"),
   threeAutoRotate: document.getElementById("threeAutoRotate"),
+  threeMaterialPreset: document.getElementById("threeMaterialPreset"),
+  threePrimaryColor: document.getElementById("threePrimaryColor"),
+  threeMetalness: document.getElementById("threeMetalness"),
+  threeRoughness: document.getElementById("threeRoughness"),
+  threeMetalnessVal: document.getElementById("threeMetalnessVal"),
+  threeRoughnessVal: document.getElementById("threeRoughnessVal"),
   shapeBodyCurve: document.getElementById("shapeBodyCurve"),
   shapeHeadFlare: document.getElementById("shapeHeadFlare"),
   shapeHeight: document.getElementById("shapeHeight"),
@@ -150,6 +249,19 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
+function clamp01(value) {
+  return clamp(Number(value), 0, 1);
+}
+
+function lerp(a, b, t) {
+  return a + ((b - a) * t);
+}
+
+function smoothstep01(t) {
+  const x = clamp(Number(t), 0, 1);
+  return x * x * (3 - (2 * x));
+}
+
 function cloneDimensions(dim) {
   return JSON.parse(JSON.stringify(dim));
 }
@@ -159,6 +271,151 @@ function setSliderValue(el, value) {
     return;
   }
   el.value = String(value);
+}
+
+function normalizeHexColor(value, fallback = "#c9d0d4") {
+  const raw = String(value || "").trim();
+  const prefixed = raw.startsWith("#") ? raw : `#${raw}`;
+  if (/^#[0-9a-fA-F]{6}$/.test(prefixed)) {
+    return prefixed.toLowerCase();
+  }
+  return fallback;
+}
+
+function getThreeMaterialPreset(presetKey) {
+  return THREE_MATERIAL_PRESETS[presetKey] || THREE_MATERIAL_PRESETS["stainless-brushed"];
+}
+
+function shadeHexColor(hex, multiplier) {
+  const color = new THREE.Color(normalizeHexColor(hex));
+  color.multiplyScalar(clamp(Number(multiplier), 0.2, 1.6));
+  return `#${color.getHexString()}`;
+}
+
+function updateThreeMaterialValueLabels() {
+  if (!els.threeMetalnessVal || !els.threeRoughnessVal) {
+    return;
+  }
+  const material = state.three.materialState;
+  els.threeMetalnessVal.textContent = `${Math.round(clamp01(material.metalness) * 100)}%`;
+  els.threeRoughnessVal.textContent = `${Math.round(clamp01(material.roughness) * 100)}%`;
+}
+
+function syncThreeMaterialInputs() {
+  const material = state.three.materialState;
+  if (els.threeMaterialPreset) {
+    els.threeMaterialPreset.value = material.preset;
+  }
+  if (els.threePrimaryColor) {
+    els.threePrimaryColor.value = normalizeHexColor(material.primaryColor);
+  }
+  if (els.threeMetalness) {
+    els.threeMetalness.value = String(Math.round(clamp01(material.metalness) * 100));
+  }
+  if (els.threeRoughness) {
+    els.threeRoughness.value = String(Math.round(clamp01(material.roughness) * 100));
+  }
+  updateThreeMaterialValueLabels();
+}
+
+function applyThreeMaterialPreset(presetKey, rerender = true) {
+  const resolvedKey = (presetKey in THREE_MATERIAL_PRESETS) ? presetKey : "stainless-brushed";
+  const preset = getThreeMaterialPreset(resolvedKey);
+  state.three.materialState.preset = resolvedKey;
+  state.three.materialState.primaryColor = normalizeHexColor(preset.primaryColor);
+  state.three.materialState.metalness = clamp01(preset.metalness);
+  state.three.materialState.roughness = clamp01(preset.roughness);
+  syncThreeMaterialInputs();
+  if (rerender && state.blueprint) {
+    renderThreeModel();
+  }
+}
+
+function markThreeMaterialCustom() {
+  state.three.materialState.preset = "custom";
+  if (els.threeMaterialPreset) {
+    els.threeMaterialPreset.value = "custom";
+  }
+}
+
+function resolveThreeMaterialPalette() {
+  const material = state.three.materialState;
+  const preset = getThreeMaterialPreset(material.preset);
+  const primaryColor = normalizeHexColor(material.primaryColor, preset.primaryColor);
+  const accentColor = normalizeHexColor(
+    material.preset === "custom" ? shadeHexColor(primaryColor, 0.79) : preset.accentColor,
+    shadeHexColor(primaryColor, 0.79),
+  );
+  const handleColor = normalizeHexColor(preset.handleColor, "#14181c");
+  const gasketColor = normalizeHexColor(preset.gasketColor, "#214b3f");
+  return {
+    primaryColor,
+    accentColor,
+    handleColor,
+    gasketColor,
+    metalness: clamp01(material.metalness),
+    roughness: clamp01(material.roughness),
+    accentMetalness: clamp01(preset.accentMetalness ?? (material.metalness * 0.88)),
+    accentRoughness: clamp01(preset.accentRoughness ?? (material.roughness + 0.1)),
+    handleMetalness: clamp01(preset.handleMetalness ?? 0.12),
+    handleRoughness: clamp01(preset.handleRoughness ?? 0.86),
+  };
+}
+
+function buildBodyProfilePoints(dim, sampleCount = 34) {
+  const bodyH = Number(dim.body_height_mm);
+  const rBottom = Number(dim.body_bottom_diameter_mm) * 0.5;
+  const rMax = Number(dim.body_max_diameter_mm) * 0.5;
+  const rNeck = Number(dim.neck_diameter_mm) * 0.5;
+  const bulgeY = bodyH * 0.42;
+  const points = [];
+
+  for (let i = 0; i <= sampleCount; i += 1) {
+    const y = (bodyH * i) / sampleCount;
+    let r = rBottom;
+    if (y <= bulgeY) {
+      const t = smoothstep01(y / Math.max(bulgeY, 1));
+      const softBulge = Math.sin(Math.PI * t) * (rMax - rBottom) * 0.06;
+      r = lerp(rBottom, rMax, t) + softBulge;
+    } else {
+      const t = smoothstep01((y - bulgeY) / Math.max(bodyH - bulgeY, 1));
+      const shoulder = Math.sin(Math.PI * t) * (rMax - rNeck) * 0.05;
+      r = lerp(rMax, rNeck, t) + (shoulder * (1 - (t * 0.5)));
+    }
+    points.push([Math.max(r, 4), y]);
+  }
+  return points;
+}
+
+function buildHeadProfilePoints(dim, sampleCount = 24, startY = null) {
+  const bodyH = Number(dim.body_height_mm);
+  const overallH = Number(dim.overall_height_mm);
+  const overlap = Number(dim.head_neck_overlap_mm);
+  const rNeck = Number(dim.neck_diameter_mm) * 0.5;
+  const rHead = Number(dim.head_top_diameter_mm) * 0.5;
+  const defaultStart = bodyH - overlap;
+  const start = clamp(Number.isFinite(startY) ? startY : defaultStart, 0, overallH - 1);
+  const span = Math.max(overallH - start, 1);
+  const points = [];
+
+  for (let i = 0; i <= sampleCount; i += 1) {
+    const t = smoothstep01(i / sampleCount);
+    const y = start + (span * t);
+    const flare = Math.sin(Math.PI * t) * (rHead - rNeck) * 0.1;
+    const r = lerp(rNeck, rHead, t) + (flare * (1 - (t * 0.35)));
+    points.push([Math.max(r, 4), y]);
+  }
+  return points;
+}
+
+function buildOuterProfilePoints(dim, bodySamples = 34, headSamples = 24) {
+  const body = buildBodyProfilePoints(dim, bodySamples);
+  const head = buildHeadProfilePoints(dim, headSamples, Number(dim.body_height_mm));
+  return [...body, ...head.slice(1)];
+}
+
+function toLatheProfile(points) {
+  return points.map(([radius, y]) => new THREE.Vector2(Math.max(radius, 1), y));
 }
 
 function updatePlaygroundValueLabels() {
@@ -1029,31 +1286,22 @@ function drawBlueprint() {
   const sideOx = 260;
   const sideOy = 400;
 
-  const bodyH = dim.body_height_mm;
   const overallH = dim.overall_height_mm;
 
   const rBottom = dim.body_bottom_diameter_mm * 0.5;
   const rMax = dim.body_max_diameter_mm * 0.5;
   const rNeck = dim.neck_diameter_mm * 0.5;
   const rHead = dim.head_top_diameter_mm * 0.5;
-
-  const right = [
-    [rBottom, 0],
-    [rMax, bodyH * 0.3],
-    [rMax * 0.98, bodyH * 0.68],
-    [rNeck, bodyH],
-    [rNeck * 1.18, bodyH + (overallH - bodyH) * 0.45],
-    [rHead, overallH],
-  ];
+  const sideProfile = buildOuterProfilePoints(dim, 42, 30);
 
   const mapSide = (xMm, yMm) => [sideOx + xMm * scale, sideOy - yMm * scale];
 
   let pathData = "";
-  right.forEach((point, index) => {
+  sideProfile.forEach((point, index) => {
     const [x, y] = mapSide(point[0], point[1]);
     pathData += `${index === 0 ? "M" : "L"}${x.toFixed(2)} ${y.toFixed(2)} `;
   });
-  const left = [...right].reverse().map((point) => [-point[0], point[1]]);
+  const left = [...sideProfile].reverse().map((point) => [-point[0], point[1]]);
   left.forEach((point) => {
     const [x, y] = mapSide(point[0], point[1]);
     pathData += `L${x.toFixed(2)} ${y.toFixed(2)} `;
@@ -1157,28 +1405,30 @@ function drawBlueprint() {
 
 function buildTeapotGroup(dim) {
   const group = new THREE.Group();
+  const palette = resolveThreeMaterialPalette();
 
   const steel = new THREE.MeshStandardMaterial({
-    color: 0xc9d0d4,
-    metalness: 0.86,
-    roughness: 0.22,
+    color: new THREE.Color(palette.primaryColor),
+    metalness: palette.metalness,
+    roughness: palette.roughness,
     envMapIntensity: 1.0,
   });
 
   const steelDark = new THREE.MeshStandardMaterial({
-    color: 0x9ca9af,
-    metalness: 0.75,
-    roughness: 0.34,
+    color: new THREE.Color(palette.accentColor),
+    metalness: palette.accentMetalness,
+    roughness: palette.accentRoughness,
+    envMapIntensity: 0.9,
   });
 
   const handleMat = new THREE.MeshStandardMaterial({
-    color: 0x14181c,
-    metalness: 0.12,
-    roughness: 0.86,
+    color: new THREE.Color(palette.handleColor),
+    metalness: palette.handleMetalness,
+    roughness: palette.handleRoughness,
   });
 
   const gasketMat = new THREE.MeshStandardMaterial({
-    color: 0x214b3f,
+    color: new THREE.Color(palette.gasketColor),
     metalness: 0.05,
     roughness: 0.88,
   });
@@ -1186,33 +1436,23 @@ function buildTeapotGroup(dim) {
   const bodyH = dim.body_height_mm;
   const overallH = dim.overall_height_mm;
 
-  const rBottom = dim.body_bottom_diameter_mm * 0.5;
-  const rMax = dim.body_max_diameter_mm * 0.5;
-  const rNeck = dim.neck_diameter_mm * 0.5;
   const rHead = dim.head_top_diameter_mm * 0.5;
+  const rNeck = dim.neck_diameter_mm * 0.5;
 
-  const bodyProfile = [
-    new THREE.Vector2(rBottom, 0),
-    new THREE.Vector2(rMax, bodyH * 0.3),
-    new THREE.Vector2(rMax * 0.98, bodyH * 0.68),
-    new THREE.Vector2(rNeck, bodyH),
-  ];
-
-  const bodyGeo = new THREE.LatheGeometry(bodyProfile, 72);
+  const bodyProfile = toLatheProfile(buildBodyProfilePoints(dim, 52));
+  const bodyGeo = new THREE.LatheGeometry(bodyProfile, 96);
   const bodyMesh = new THREE.Mesh(bodyGeo, steel);
   bodyMesh.castShadow = true;
   bodyMesh.receiveShadow = true;
+  bodyMesh.name = "body_shell";
   group.add(bodyMesh);
 
   const headStart = bodyH - dim.head_neck_overlap_mm;
-  const headProfile = [
-    new THREE.Vector2(rNeck, headStart),
-    new THREE.Vector2(rNeck * 1.18, headStart + (overallH - headStart) * 0.45),
-    new THREE.Vector2(rHead, overallH),
-  ];
-  const headGeo = new THREE.LatheGeometry(headProfile, 72);
+  const headProfile = toLatheProfile(buildHeadProfilePoints(dim, 34, headStart));
+  const headGeo = new THREE.LatheGeometry(headProfile, 96);
   const headMesh = new THREE.Mesh(headGeo, steel);
   headMesh.castShadow = true;
+  headMesh.name = "curved_head";
   group.add(headMesh);
 
   const insertOuter = dim.insert_outer_diameter_mm * 0.5;
@@ -1227,6 +1467,7 @@ function buildTeapotGroup(dim) {
   ];
   const insertGeo = new THREE.LatheGeometry(insertProfile, 64);
   const insertMesh = new THREE.Mesh(insertGeo, steelDark);
+  insertMesh.name = "insert_filter";
   group.add(insertMesh);
 
   const gasketGeo = new THREE.TorusGeometry(
@@ -1238,6 +1479,7 @@ function buildTeapotGroup(dim) {
   const gasketMesh = new THREE.Mesh(gasketGeo, gasketMat);
   gasketMesh.rotation.x = Math.PI / 2;
   gasketMesh.position.y = bodyH + 1;
+  gasketMesh.name = "gasket";
   group.add(gasketMesh);
 
   const baseGeo = new THREE.CylinderGeometry(
@@ -1248,6 +1490,7 @@ function buildTeapotGroup(dim) {
   );
   const baseMesh = new THREE.Mesh(baseGeo, steelDark);
   baseMesh.position.y = dim.base_cap_height_mm * 0.5;
+  baseMesh.name = "base_cap";
   group.add(baseMesh);
 
   const anchorX = rHead + dim.handle_offset_mm;
@@ -1271,6 +1514,7 @@ function buildTeapotGroup(dim) {
   );
   const handleMesh = new THREE.Mesh(handleGeo, handleMat);
   handleMesh.castShadow = true;
+  handleMesh.name = "handle";
   group.add(handleMesh);
 
   const centeringBox = new THREE.Box3().setFromObject(group);
@@ -1281,6 +1525,31 @@ function buildTeapotGroup(dim) {
   return group;
 }
 
+function disposeObject3D(object) {
+  if (!object) {
+    return;
+  }
+  object.traverse((child) => {
+    if (!child.isMesh) {
+      return;
+    }
+    if (child.geometry?.dispose) {
+      child.geometry.dispose();
+    }
+    if (Array.isArray(child.material)) {
+      child.material.forEach((material) => {
+        if (material?.dispose) {
+          material.dispose();
+        }
+      });
+      return;
+    }
+    if (child.material?.dispose) {
+      child.material.dispose();
+    }
+  });
+}
+
 function renderThreeModel() {
   if (!state.three.scene || !state.blueprint) {
     return;
@@ -1288,6 +1557,7 @@ function renderThreeModel() {
 
   if (state.teapotGroup) {
     state.three.scene.remove(state.teapotGroup);
+    disposeObject3D(state.teapotGroup);
   }
 
   state.teapotGroup = buildTeapotGroup(state.blueprint.dimensions);
@@ -1345,6 +1615,7 @@ function initThree() {
   state.three.camera = camera;
   state.three.renderer = renderer;
   state.three.controls = controls;
+  syncThreeMaterialInputs();
 
   const resize = () => {
     const width = els.threeCanvas.clientWidth;
@@ -1719,20 +1990,11 @@ function buildDxfLocal(blueprint) {
     );
   };
 
-  const bodyH = d.body_height_mm;
   const overallH = d.overall_height_mm;
   const rBottom = d.body_bottom_diameter_mm * 0.5;
-  const rMax = d.body_max_diameter_mm * 0.5;
   const rNeck = d.neck_diameter_mm * 0.5;
   const rHead = d.head_top_diameter_mm * 0.5;
-  const p = [
-    [rBottom, 0.0],
-    [rMax, bodyH * 0.30],
-    [rMax * 0.98, bodyH * 0.68],
-    [rNeck, bodyH],
-    [rNeck * 1.18, bodyH + (overallH - bodyH) * 0.45],
-    [rHead, overallH],
-  ];
+  const p = buildOuterProfilePoints(d, 44, 30);
   for (let i = 0; i < p.length - 1; i += 1) {
     addLine(p[i][0], p[i][1], p[i + 1][0], p[i + 1][1], "SIDE");
     addLine(-p[i][0], p[i][1], -p[i + 1][0], p[i + 1][1], "SIDE");
@@ -1760,20 +2022,7 @@ function buildDxfLocal(blueprint) {
 
 function buildObjLocal(blueprint) {
   const d = blueprint.dimensions;
-  const bodyH = d.body_height_mm;
-  const overallH = d.overall_height_mm;
-  const rBottom = d.body_bottom_diameter_mm * 0.5;
-  const rMax = d.body_max_diameter_mm * 0.5;
-  const rNeck = d.neck_diameter_mm * 0.5;
-  const rHead = d.head_top_diameter_mm * 0.5;
-  const profile = [
-    [rBottom, 0.0],
-    [rMax, bodyH * 0.30],
-    [rMax * 0.98, bodyH * 0.68],
-    [rNeck, bodyH],
-    [rNeck * 1.18, bodyH + (overallH - bodyH) * 0.45],
-    [rHead, overallH],
-  ];
+  const profile = buildOuterProfilePoints(d, 44, 30);
   const seg = 56;
   const verts = [];
   const faces = [];
@@ -1863,20 +2112,7 @@ async function generatePrototypeLocalImage() {
   const ox = 840;
   const oy = 730;
   const scale = Math.min(2.0, 320 / Math.max(dim.head_top_diameter_mm, dim.body_max_diameter_mm));
-  const bodyH = dim.body_height_mm;
-  const overallH = dim.overall_height_mm;
-  const rBottom = dim.body_bottom_diameter_mm * 0.5;
-  const rMax = dim.body_max_diameter_mm * 0.5;
-  const rNeck = dim.neck_diameter_mm * 0.5;
-  const rHead = dim.head_top_diameter_mm * 0.5;
-  const prof = [
-    [rBottom, 0],
-    [rMax, bodyH * 0.3],
-    [rMax * 0.98, bodyH * 0.68],
-    [rNeck, bodyH],
-    [rNeck * 1.18, bodyH + (overallH - bodyH) * 0.45],
-    [rHead, overallH],
-  ];
+  const prof = buildOuterProfilePoints(dim, 44, 30);
   const map = (x, y) => [ox + x * scale, oy - y * scale];
   ctx.beginPath();
   prof.forEach((p, i) => {
@@ -2052,6 +2288,48 @@ function bindEvents() {
     });
   }
 
+  if (els.threeMaterialPreset) {
+    els.threeMaterialPreset.addEventListener("change", () => {
+      const preset = els.threeMaterialPreset.value;
+      if (preset === "custom") {
+        markThreeMaterialCustom();
+        syncThreeMaterialInputs();
+        renderThreeModel();
+        return;
+      }
+      applyThreeMaterialPreset(preset, true);
+      setStatus(`3D material preset applied: ${preset}.`, "ok");
+    });
+  }
+
+  const onCustomMaterialInput = () => {
+    if (!els.threePrimaryColor || !els.threeMetalness || !els.threeRoughness) {
+      return;
+    }
+    markThreeMaterialCustom();
+    state.three.materialState.primaryColor = normalizeHexColor(
+      els.threePrimaryColor.value,
+      state.three.materialState.primaryColor,
+    );
+    state.three.materialState.metalness = clamp01((Number.parseFloat(els.threeMetalness.value) || 0) / 100);
+    state.three.materialState.roughness = clamp01((Number.parseFloat(els.threeRoughness.value) || 0) / 100);
+    updateThreeMaterialValueLabels();
+    renderThreeModel();
+  };
+
+  if (els.threePrimaryColor) {
+    els.threePrimaryColor.addEventListener("input", onCustomMaterialInput);
+    els.threePrimaryColor.addEventListener("change", onCustomMaterialInput);
+  }
+  if (els.threeMetalness) {
+    els.threeMetalness.addEventListener("input", onCustomMaterialInput);
+    els.threeMetalness.addEventListener("change", onCustomMaterialInput);
+  }
+  if (els.threeRoughness) {
+    els.threeRoughness.addEventListener("input", onCustomMaterialInput);
+    els.threeRoughness.addEventListener("change", onCustomMaterialInput);
+  }
+
   document.querySelectorAll("[data-quick-shape]").forEach((button) => {
     button.addEventListener("click", () => {
       const action = button.getAttribute("data-quick-shape");
@@ -2107,6 +2385,7 @@ function bindEvents() {
 }
 
 async function bootstrap() {
+  applyThreeMaterialPreset(state.three.materialState.preset, false);
   initThree();
   bindEvents();
 
