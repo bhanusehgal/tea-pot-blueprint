@@ -107,6 +107,8 @@ const localImageNames = [
   "Screenshot 2026-02-09 225304.png",
 ];
 
+const THEME_STORAGE_KEY = "teapot_blueprint_theme";
+
 const THREE_MATERIAL_PRESETS = {
   "stainless-brushed": {
     primaryColor: "#c9d0d4",
@@ -196,6 +198,8 @@ const THREE_MATERIAL_PRESETS = {
 
 const els = {
   cupsInput: document.getElementById("cupsInput"),
+  themeToggleBtn: document.getElementById("themeToggleBtn"),
+  themeToggleLabel: document.getElementById("themeToggleLabel"),
   loadDefaultBtn: document.getElementById("loadDefaultBtn"),
   analyzeBtn: document.getElementById("analyzeBtn"),
   applyAnalysisBtn: document.getElementById("applyAnalysisBtn"),
@@ -266,6 +270,49 @@ function setStatus(message, type = "") {
   if (type) {
     els.statusBox.classList.add(type);
   }
+}
+
+function getSavedTheme() {
+  try {
+    return window.localStorage.getItem(THEME_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function saveTheme(theme) {
+  try {
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+  } catch {
+    // Ignore localStorage errors.
+  }
+}
+
+function applyTheme(theme) {
+  const nextTheme = theme === "dark" ? "dark" : "light";
+  document.body.dataset.theme = nextTheme;
+  if (els.themeToggleLabel) {
+    els.themeToggleLabel.textContent = nextTheme === "dark" ? "Light Mode" : "Dark Mode";
+  }
+  if (els.themeToggleBtn) {
+    els.themeToggleBtn.setAttribute("aria-pressed", String(nextTheme === "dark"));
+  }
+}
+
+function initializeTheme() {
+  const saved = getSavedTheme();
+  if (saved === "dark" || saved === "light") {
+    applyTheme(saved);
+    return;
+  }
+  applyTheme("dark");
+}
+
+function toggleTheme() {
+  const current = document.body.dataset.theme === "dark" ? "dark" : "light";
+  const next = current === "dark" ? "light" : "dark";
+  applyTheme(next);
+  saveTheme(next);
 }
 
 function clamp(value, min, max) {
@@ -2803,6 +2850,12 @@ async function exportBlueprint(format) {
 }
 
 function bindEvents() {
+  if (els.themeToggleBtn) {
+    els.themeToggleBtn.addEventListener("click", () => {
+      toggleTheme();
+    });
+  }
+
   els.loadDefaultBtn.addEventListener("click", () => {
     loadDefaultBlueprint().catch((error) => setStatus(error.message, "warn"));
   });
@@ -2976,6 +3029,7 @@ function bindEvents() {
 }
 
 async function bootstrap() {
+  initializeTheme();
   applyThreeMaterialPreset(state.three.materialState.preset, false);
   resetThreeFormControls();
   initThree();
